@@ -1,19 +1,19 @@
-#ifndef __NNMODELLOADER__
-#define __NNMODELLOADER__
+#ifndef __SUPERRESOLUTION__
+#define __SUPERRESOLUTION__
 
 #include "CommonDef.h"
 #include <torch/script.h>
 #include <string>
 
-class NNModelLoader
+class SuperResolution
 {
 private:
   torch::jit::script::Module m_model;
   bool m_modelLoaded;
 
 public:
-  NNModelLoader() : m_modelLoaded(false) {}
-  ~NNModelLoader() {}
+  SuperResolution() : m_modelLoaded(false) {}
+  ~SuperResolution() {}
 
   bool loadModel(const std::string& modelPath);
   bool isModelLoaded() const { return m_modelLoaded; }

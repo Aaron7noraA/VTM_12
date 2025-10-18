@@ -1,4 +1,5 @@
-#include "NNModelLoader.h"
+#include "../../Lib/CommonLib/SuperResolution.h"
+#include "../../Lib/CommonLib/CommonDef.h"
 #include <iostream>
 #include <vector>
 
@@ -6,11 +7,11 @@ int main(int argc, char* argv[])
 {
   if (argc != 2)
   {
-    std::cerr << "usage: NNModelTest <path-to-exported-script-module>\n";
+    std::cerr << "usage: SuperResolutionTest <path-to-exported-script-module>\n";
     return -1;
   }
 
-  NNModelLoader loader;
+  SuperResolution loader;
 
   loader.loadModel(argv[1]);
   std::cout << "Model loaded successfully." << std::endl;

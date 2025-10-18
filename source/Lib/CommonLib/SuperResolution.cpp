@@ -1,7 +1,8 @@
-#include "NNModelLoader.h"
+#include "SuperResolution.h"
+#include "CommonDef.h"
 #include <iostream>
 
-bool NNModelLoader::loadModel(const std::string& modelPath)
+bool SuperResolution::loadModel(const std::string& modelPath)
 {
   m_model = torch::jit::load(modelPath);
   m_model.eval();
@@ -10,7 +11,7 @@ bool NNModelLoader::loadModel(const std::string& modelPath)
   return true;
 }
 
-torch::Tensor NNModelLoader::performInference(const torch::Tensor& input)
+torch::Tensor SuperResolution::performInference(const torch::Tensor& input)
 {
   std::vector<torch::jit::IValue> inputs;
   inputs.push_back(input);
@@ -18,7 +19,7 @@ torch::Tensor NNModelLoader::performInference(const torch::Tensor& input)
   return output;
 }
 
-torch::Tensor NNModelLoader::pelArrayToTensor(const Pel* pelArray, int width, int height, int bitDepth)
+torch::Tensor SuperResolution::pelArrayToTensor(const Pel* pelArray, int width, int height, int bitDepth)
 {
   std::vector<float> floatData;
   floatData.reserve(width * height);
@@ -39,7 +40,7 @@ torch::Tensor NNModelLoader::pelArrayToTensor(const Pel* pelArray, int width, in
   return tensor;
 }
 
-void NNModelLoader::tensorToPelArray(const torch::Tensor& tensor, Pel* pelArray, int width, int height, int bitDepth)
+void SuperResolution::tensorToPelArray(const torch::Tensor& tensor, Pel* pelArray, int width, int height, int bitDepth)
 {
   torch::Tensor cpuTensor = tensor.cpu();
   float* data = cpuTensor.data_ptr<float>();
