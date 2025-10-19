@@ -84,6 +84,16 @@ else()
   target_compile_definitions( ${LIB_NAME} PUBLIC ENABLE_SPLIT_PARALLELISM=0 )
   target_compile_definitions( ${LIB_NAME} PUBLIC ENABLE_WPP_PARALLELISM=0 )
 endif()
+
+# LibTorch linking for Neural Network Super Resolution
+if( VTM_NN_SR_ENABLE )
+  target_link_libraries( ${LIB_NAME} ${TORCH_LIBRARIES} )
+  target_compile_definitions( ${LIB_NAME} PUBLIC VTM_NN_SR_ENABLE=1 )
+  
+  # Set C++17 only for SuperResolutionNN files (LibTorch requirement)
+  set_property( SOURCE SuperResolutionNN.cpp PROPERTY CXX_STANDARD 17 )
+  set_property( SOURCE SuperResolutionNN.cpp PROPERTY CXX_STANDARD_REQUIRED ON )
+endif()
   
 target_include_directories( ${LIB_NAME} PUBLIC . .. ./x86 ../libmd5 )
 target_link_libraries( ${LIB_NAME} Threads::Threads )

@@ -41,6 +41,10 @@
 #include "Picture.h"
 #include "dtrace_next.h"
 
+#ifdef VTM_NN_SR_ENABLE
+#include "SuperResolutionNN.h"
+#endif
+
 #include "UnitTools.h"
 
 //! \ingroup CommonLib
@@ -4324,13 +4328,60 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           scaledRefPic[j]->poc = poc;
           scaledRefPic[j]->longTerm = m_apcRefPicList[refList][rIdx]->longTerm;
 
-          // rescale the reference picture
+          // rescale the reference picture with NN-based super resolution
           const bool downsampling = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width >= scaledRefPic[j]->getRecoBuf().Y().width && m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height >= scaledRefPic[j]->getRecoBuf().Y().height;
+          
+          // First, perform VTM's default rescaling
           Picture::rescalePicture( m_scalingRatio[refList][rIdx],
                                    m_apcRefPicList[refList][rIdx]->getRecoBuf(), m_apcRefPicList[refList][rIdx]->slices[0]->getPPS()->getScalingWindow(),
                                    scaledRefPic[j]->getRecoBuf(), pps->getScalingWindow(),
                                    sps->getChromaFormatIdc(), sps->getBitDepths(), true, downsampling,
                                    sps->getHorCollocatedChromaFlag(), sps->getVerCollocatedChromaFlag() );
+          
+#ifdef VTM_NN_SR_ENABLE
+          // Try NN-based super resolution for luma upsampling only
+          if (!downsampling) {  // Only for upsampling, not downsampling
+            SuperResolutionNN srNN;
+            if (srNN.loadModel("models/sr_model.pt")) {
+              // Create temporary buffer for NN result
+              PelUnitBuf nnResult = scaledRefPic[j]->getRecoBuf().create();
+              
+              // Process only luma component (Y)
+              ComponentID compID = COMPONENT_Y;
+              const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID);
+              PelBuf& vtmBuf = scaledRefPic[j]->getRecoBuf().get(compID);
+              PelBuf& nnBuf = nnResult.get(compID);
+              
+              // Perform NN inference on luma only
+              if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
+                                      nnBuf.buf, nnBuf.width, nnBuf.height,
+                                      sps->getBitDepths().recon[toChannelType(compID)])) {
+                
+                // Exhaustive search: compare VTM vs NN results for luma
+                // We need the current frame as target for comparison
+                // In RPR, we compare upsampled reference against current frame
+                // For now, we'll use the current picture's luma as target
+                const CPelBuf& currentLuma = getPic()->getRecoBuf().get(COMPONENT_Y);
+                bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
+                                                 currentLuma.buf, currentLuma.width, currentLuma.height,
+                                                 sps->getBitDepths().recon[toChannelType(compID)],
+                                                 vtmBuf.buf, nnBuf.buf);
+                
+                // Choose the better result for luma only
+                if (useNN) {
+                  // Copy NN result to final output (luma only)
+                  for (int y = 0; y < vtmBuf.height; y++) {
+                    for (int x = 0; x < vtmBuf.width; x++) {
+                      vtmBuf.at(x, y) = nnBuf.at(x, y);
+                    }
+                  }
+                }
+                // If useNN is false, keep the VTM result (already in vtmBuf)
+                // Chroma components (U, V) always use VTM's default upsampling
+              }
+            }
+          }
+#endif
           scaledRefPic[j]->unscaledPic = m_apcRefPicList[refList][rIdx];
           scaledRefPic[j]->extendPicBorder( getPPS() );
 

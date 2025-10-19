@@ -68,6 +68,23 @@ if( OpenMP_FOUND )
   set( ENABLE_WPP_PARALLELISM       OFF CACHE BOOL "If SET_ENABLE_WPP_PARALLELISM is on, it will be set to this value" )
 endif()
 
+# LibTorch configuration for Neural Network Super Resolution
+option(VTM_NN_SR_ENABLE "Enable Neural Network Super Resolution" OFF)
+
+if(VTM_NN_SR_ENABLE)
+  # Find LibTorch
+  find_package(Torch REQUIRED)
+  
+  # Add compile definitions
+  add_definitions(-DVTM_NN_SR_ENABLE)
+  
+  message(STATUS "Neural Network Super Resolution enabled")
+  message(STATUS "LibTorch found: ${Torch_DIR}")
+  message(STATUS "C++17 will be set only for LibTorch files")
+else()
+  message(STATUS "Neural Network Super Resolution disabled")
+endif()
+
 # Enable warnings for some generators and toolsets.
 # bb_enable_warnings( gcc warnings-as-errors -Wno-sign-compare )
 # bb_enable_warnings( gcc -Wno-unused-variable )
@@ -154,7 +171,6 @@ add_subdirectory( "source/App/Parcat" )
 add_subdirectory( "source/App/StreamMergeApp" )
 add_subdirectory( "source/App/BitstreamExtractorApp" )
 add_subdirectory( "source/App/SubpicMergeApp" )
-add_subdirectory( "source/App/SuperResolutionTest" )
 if( EXTENSION_360_VIDEO )
   add_subdirectory( "source/App/utils/360ConvertApp" )
 endif()
