@@ -59,7 +59,7 @@ double SuperResolutionNN::calculateMSE(const Pel* block1, const Pel* block2, int
 }
 
 bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int refHeight,
-                                       Pel* targetBlock, int targetWidth, int targetHeight,
+                                       const Pel* targetFrame, int targetWidth, int targetHeight,
                                        int bitDepth, Pel* vtmResult, Pel* nnResult)
 {
   if (!m_modelLoaded)
@@ -69,11 +69,11 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
 
   // Exhaustive search: compare VTM vs NN upsampling results
   // In RPR context, we compare the quality of the two upsampling methods
-  // We use the targetBlock as reference (this should be the target frame we're trying to match)
+  // We use the targetFrame as reference (this should be the target frame we're trying to match)
   
   // Calculate MSE between each result and the target frame
-  double vtmMSE = calculateMSE(targetBlock, vtmResult, targetWidth, targetHeight);
-  double nnMSE = calculateMSE(targetBlock, nnResult, targetWidth, targetHeight);
+  double vtmMSE = calculateMSE(targetFrame, vtmResult, targetWidth, targetHeight);
+  double nnMSE = calculateMSE(targetFrame, nnResult, targetWidth, targetHeight);
   
   // Return true if NN result has lower MSE (better quality) than VTM result
   return nnMSE < vtmMSE;

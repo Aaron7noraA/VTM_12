@@ -35,7 +35,7 @@ public:
   
   // Exhaustive search algorithm
   bool exhaustiveSearch(const Pel* refBlock, int refWidth, int refHeight,
-                       Pel* targetBlock, int targetWidth, int targetHeight,
+                       const Pel* targetFrame, int targetWidth, int targetHeight,
                        int bitDepth, Pel* vtmResult, Pel* nnResult);
   
 private:
