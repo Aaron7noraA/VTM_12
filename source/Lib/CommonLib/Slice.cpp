@@ -4347,7 +4347,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
             
             SuperResolutionNN srNN;
             {
-              const std::string& srModelPath = getPPS()->pcPic->cs->vps->getEncLib()->getSRModelPath();
+              // Get model path from SPS (passed through encoder configuration)
+              const std::string& srModelPath = getSPS()->getSRModelPath();
               const char* srPathCStr = srModelPath.c_str();
               if (srNN.loadModel(srPathCStr)) {
               
