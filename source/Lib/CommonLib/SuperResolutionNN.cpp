@@ -148,6 +148,15 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
   printf("Calculating NN MSE...\n");
   double nnMSE = calculateMSE(targetFrame, nnResult, targetWidth, targetHeight);
   
+  // DEBUG: Sample some pixel values to verify data integrity
+  printf("DEBUG: Sample pixel values:\n");
+  printf("  Target[0,0]: %d, VTM[0,0]: %d, NN[0,0]: %d\n", 
+         targetFrame[0], vtmResult[0], nnResult[0]);
+  printf("  Target[100,100]: %d, VTM[100,100]: %d, NN[100,100]: %d\n", 
+         targetFrame[100 * targetWidth + 100], 
+         vtmResult[100 * targetWidth + 100], 
+         nnResult[100 * targetWidth + 100]);
+  
   // Print both MSE values for comparison
   printf("Exhaustive Search MSE Comparison:\n");
   printf("  VTM MSE: %.6f\n", vtmMSE);
