@@ -139,35 +139,14 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
   // We use the targetFrame as reference (this should be the target frame we're trying to match)
   
   // Debug: Print dimensions before MSE calculation
-  printf("exhaustiveSearch - Dimensions: target=%dx%d, vtmResult=%p, nnResult=%p\n", 
-         targetWidth, targetHeight, vtmResult, nnResult);
+  // printf("exhaustiveSearch - Dimensions: target=%dx%d, vtmResult=%p, nnResult=%p\n", 
+  //        targetWidth, targetHeight, vtmResult, nnResult);
   
   // Calculate MSE between each result and the target frame
-  printf("Calculating VTM MSE...\n");
+  // printf("Calculating VTM MSE...\n");
   double vtmMSE = calculateMSE(targetFrame, targetStride, vtmResult, vtmStride, targetWidth, targetHeight);
-  printf("Calculating NN MSE...\n");
+  // printf("Calculating NN MSE...\n");
   double nnMSE = calculateMSE(targetFrame, targetStride, nnResult, nnStride, targetWidth, targetHeight);
-  
-  // DEBUG: Sample some pixel values to verify data integrity
-  printf("DEBUG: Sample pixel values:\n");
-  printf("  Target[0,0]: %d, VTM[0,0]: %d, NN[0,0]: %d\n", 
-         targetFrame[0], vtmResult[0], nnResult[0]);
-  printf("  Target[100,100]: %d, VTM[100,100]: %d, NN[100,100]: %d\n", 
-         targetFrame[100 * targetWidth + 100], 
-         vtmResult[100 * targetWidth + 100], 
-         nnResult[100 * targetWidth + 100]);
-  
-  // DEBUG: Check for potential buffer corruption
-  printf("DEBUG: Buffer integrity check:\n");
-  printf("  VTM result range: min=%d, max=%d\n", 
-         *std::min_element(vtmResult, vtmResult + targetWidth * targetHeight),
-         *std::max_element(vtmResult, vtmResult + targetWidth * targetHeight));
-  printf("  NN result range: min=%d, max=%d\n", 
-         *std::min_element(nnResult, nnResult + targetWidth * targetHeight),
-         *std::max_element(nnResult, nnResult + targetWidth * targetHeight));
-  printf("  Target range: min=%d, max=%d\n", 
-         *std::min_element(targetFrame, targetFrame + targetWidth * targetHeight),
-         *std::max_element(targetFrame, targetFrame + targetWidth * targetHeight));
   
   // Print both MSE values for comparison
   printf("Exhaustive Search MSE Comparison:\n");
@@ -209,12 +188,12 @@ void SuperResolutionNN::tensorToPelArray(const torch::Tensor& tensor, Pel* pelAr
   torch::Tensor cpuTensor = tensor.cpu();
   
   // Debug: Print tensor shape before processing
-  printf("tensorToPelArray - Input tensor shape: [");
-  for (int i = 0; i < cpuTensor.dim(); i++) {
-    printf("%ld", cpuTensor.size(i));
-    if (i < cpuTensor.dim() - 1) printf(", ");
-  }
-  printf("]\n");
+  // printf("tensorToPelArray - Input tensor shape: [");
+  // for (int i = 0; i < cpuTensor.dim(); i++) {
+  //   printf("%ld", cpuTensor.size(i));
+  //   if (i < cpuTensor.dim() - 1) printf(", ");
+  // }
+  // printf("]\n");
   
   // Remove batch dimension if present: [1, 1, H, W] -> [1, H, W]
   if (cpuTensor.dim() == 4) {
