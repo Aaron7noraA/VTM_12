@@ -4374,6 +4374,11 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   printf("VTM_NN_SR: Target frame dimensions: %dx%d\n", targetLuma.width, targetLuma.height);
                   printf("VTM_NN_SR: Upsampled target dimensions: %dx%d\n", vtmBuf.width, vtmBuf.height);
                   
+                  // DEBUG: Check if target frame is actually changing
+                  printf("VTM_NN_SR: Target frame sample values: [0,0]=%d, [1,1]=%d, [50,50]=%d\n", 
+                         targetLuma.buf[0], targetLuma.buf[1 * targetLuma.width + 1], 
+                         targetLuma.buf[50 * targetLuma.width + 50]);
+                  
                   // Create a copy of VTM result to prevent buffer corruption
                   Pel* vtmResultCopy = new Pel[vtmBuf.width * vtmBuf.height];
                   memcpy(vtmResultCopy, vtmBuf.buf, vtmBuf.width * vtmBuf.height * sizeof(Pel));

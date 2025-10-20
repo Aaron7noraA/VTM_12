@@ -158,6 +158,13 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
          vtmResult[100 * targetWidth + 100], 
          nnResult[100 * targetWidth + 100]);
   
+  // DEBUG: Check buffer integrity with more samples
+  printf("DEBUG: Additional buffer samples:\n");
+  printf("  Target[1,1]: %d, VTM[1,1]: %d, NN[1,1]: %d\n", 
+         targetFrame[1 * targetWidth + 1], vtmResult[1 * targetWidth + 1], nnResult[1 * targetWidth + 1]);
+  printf("  Target[50,50]: %d, VTM[50,50]: %d, NN[50,50]: %d\n", 
+         targetFrame[50 * targetWidth + 50], vtmResult[50 * targetWidth + 50], nnResult[50 * targetWidth + 50]);
+  
   // DEBUG: Check for potential buffer corruption
   printf("DEBUG: Buffer integrity check:\n");
   printf("  VTM result range: min=%d, max=%d\n", 
