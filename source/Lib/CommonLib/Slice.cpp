@@ -4402,7 +4402,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 // Clean up allocated memory
                 delete[] nnResult;
               } // End of else block for valid dimensions
-            }
+            } // End of if (srNN.loadModel(srPathCStr))
           }
 #endif
           scaledRefPic[j]->unscaledPic = m_apcRefPicList[refList][rIdx];
