@@ -4341,20 +4341,51 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
 #ifdef VTM_NN_SR_ENABLE
           // Try NN-based super resolution for luma upsampling only
           if (!downsampling) {  // Only for upsampling, not downsampling
+            printf("VTM_NN_SR: Processing reference frame %d (refList=%d, rIdx=%d)\n", rIdx, refList, rIdx);
+            printf("VTM_NN_SR: Original ref pic dimensions: %dx%d\n", 
+                   m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width,
+                   m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height);
+            printf("VTM_NN_SR: Scaled ref pic dimensions: %dx%d\n", 
+                   scaledRefPic[j]->getRecoBuf().Y().width,
+                   scaledRefPic[j]->getRecoBuf().Y().height);
+            printf("VTM_NN_SR: Scaling ratio: %d:%d\n", 
+                   m_scalingRatio[refList][rIdx].first, m_scalingRatio[refList][rIdx].second);
+            printf("VTM_NN_SR: downsampling flag: %s\n", downsampling ? "true" : "false");
+            printf("VTM_NN_SR: scaledRefPic[j] valid: %s\n", scaledRefPic[j] ? "yes" : "no");
+            
             SuperResolutionNN srNN;
             if (srNN.loadModel("models/sr_model.pt")) {
-              // Create temporary buffer for NN result
-              PelUnitBuf nnResult = scaledRefPic[j]->getRecoBuf().create();
               
               // Process only luma component (Y)
               ComponentID compID = COMPONENT_Y;
               const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID);
               PelBuf& vtmBuf = scaledRefPic[j]->getRecoBuf().get(compID);
-              PelBuf& nnBuf = nnResult.get(compID);
+              
+              // Debug: Print dimensions to identify the issue
+              printf("VTM_NN_SR: Debug dimensions - refBuf: %dx%d, vtmBuf: %dx%d\n", 
+                     refBuf.width, refBuf.height, vtmBuf.width, vtmBuf.height);
+              
+              // Validate dimensions before proceeding
+              if (vtmBuf.width <= 0 || vtmBuf.height <= 0) {
+                printf("VTM_NN_SR: ERROR - Invalid vtmBuf dimensions: %dx%d. Skipping NN processing.\n", 
+                       vtmBuf.width, vtmBuf.height);
+                printf("VTM_NN_SR: This might indicate the scaled reference picture wasn't properly initialized.\n");
+                printf("VTM_NN_SR: scaledRefPic[j] pointer: %p\n", scaledRefPic[j]);
+                if (scaledRefPic[j]) {
+                  printf("VTM_NN_SR: scaledRefPic[j]->getRecoBuf() pointer: %p\n", &scaledRefPic[j]->getRecoBuf());
+                }
+                // Skip NN processing but continue with VTM default
+              } else if (refBuf.width <= 0 || refBuf.height <= 0) {
+                printf("VTM_NN_SR: ERROR - Invalid refBuf dimensions: %dx%d. Skipping NN processing.\n", 
+                       refBuf.width, refBuf.height);
+                // Skip NN processing but continue with VTM default
+              } else {
+              
+              Pel* nnResult = new Pel[vtmBuf.width * vtmBuf.height];
               
               // Perform NN inference on luma only
               if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
-                                      nnBuf.buf, nnBuf.width, nnBuf.height,
+                                      nnResult, vtmBuf.width, vtmBuf.height,
                                       sps->getBitDepths().recon[toChannelType(compID)])) {
                 
                 // Exhaustive search: compare VTM vs NN results for luma
@@ -4365,20 +4396,24 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
                                                  currentLuma.buf, currentLuma.width, currentLuma.height,
                                                  sps->getBitDepths().recon[toChannelType(compID)],
-                                                 vtmBuf.buf, nnBuf.buf);
+                                                 vtmBuf.buf, nnResult);
                 
                 // Choose the better result for luma only
                 if (useNN) {
                   // Copy NN result to final output (luma only)
                   for (int y = 0; y < vtmBuf.height; y++) {
                     for (int x = 0; x < vtmBuf.width; x++) {
-                      vtmBuf.at(x, y) = nnBuf.at(x, y);
+                      vtmBuf.at(x, y) = nnResult[y * vtmBuf.width + x];
                     }
                   }
                 }
                 // If useNN is false, keep the VTM result (already in vtmBuf)
                 // Chroma components (U, V) always use VTM's default upsampling
               }
+              
+              // Clean up allocated memory
+              delete[] nnResult;
+              } // End of else block for valid dimensions
             }
           }
 #endif

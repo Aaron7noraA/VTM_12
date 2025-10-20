@@ -36,6 +36,8 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   if (inputWidth <= 0 || inputHeight <= 0 || outputWidth <= 0 || outputHeight <= 0)
   {
     printf("ERROR: Invalid dimensions in performInference!\n");
+    printf("  inputWidth=%d, inputHeight=%d, outputWidth=%d, outputHeight=%d\n", 
+           inputWidth, inputHeight, outputWidth, outputHeight);
     return false;
   }
 
