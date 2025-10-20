@@ -4366,8 +4366,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   // Exhaustive search: compare VTM vs NN results for luma
-                  // Compare both upsampling methods against the original uncompressed input frame at target resolution
-                  // This makes perfect sense: which method better preserves the original content?
+                  // Compare both upsampling methods against the current frame's original input at target resolution
+                  // This makes sense: which upsampling method produces a result closer to what the current frame should look like?
                   const CPelBuf& targetLuma = getPic()->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
                   
                   // DEBUG: Check dimensions to verify we have the target resolution
