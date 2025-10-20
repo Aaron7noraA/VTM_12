@@ -4334,6 +4334,29 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           // DEBUG: Check VTM buffer BEFORE upsampling
           printf("VTM_NN_SR: Before VTM upsampling - POC=%d, j=%d\n", poc, j);
           
+          // Check if VTM buffer is properly initialized
+          const PelUnitBuf& unitBufBefore = scaledRefPic[j]->getRecoBuf();
+          const PelBuf& vtmBufBefore = unitBufBefore.Y();
+          printf("VTM_NN_SR: VTM buffer before upsampling - ptr=%p, dims=%dx%d\n", 
+                 vtmBufBefore.buf, vtmBufBefore.width, vtmBufBefore.height);
+          
+          // Check for uninitialized data
+          bool hasUninitializedData = false;
+          for (int y = 0; y < std::min(10, vtmBufBefore.height) && !hasUninitializedData; y++) {
+            for (int x = 0; x < std::min(10, vtmBufBefore.width) && !hasUninitializedData; x++) {
+              Pel value = vtmBufBefore.buf[y * vtmBufBefore.width + x];
+              if (value < 0 || value > 1023) {
+                hasUninitializedData = true;
+                printf("VTM_NN_SR: Uninitialized data at [%d,%d] = %d\n", x, y, value);
+              }
+            }
+          }
+          if (hasUninitializedData) {
+            printf("VTM_NN_SR: VTM buffer has uninitialized data before upsampling!\n");
+          } else {
+            printf("VTM_NN_SR: VTM buffer appears initialized before upsampling\n");
+          }
+          
           // First, perform VTM's default rescaling
           Picture::rescalePicture( m_scalingRatio[refList][rIdx],
                                    m_apcRefPicList[refList][rIdx]->getRecoBuf(), m_apcRefPicList[refList][rIdx]->slices[0]->getPPS()->getScalingWindow(),
@@ -4343,6 +4366,30 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           
           // DEBUG: Check VTM buffer AFTER upsampling
           printf("VTM_NN_SR: After VTM upsampling - POC=%d, j=%d\n", poc, j);
+          
+          // Check the buffer that VTM just wrote to
+          const PelUnitBuf& unitBufAfter = scaledRefPic[j]->getRecoBuf();
+          const PelBuf& vtmBufAfter = unitBufAfter.Y();
+          printf("VTM_NN_SR: VTM buffer after upsampling - ptr=%p, dims=%dx%d\n", 
+                 vtmBufAfter.buf, vtmBufAfter.width, vtmBufAfter.height);
+          
+          // Check if VTM actually wrote valid data
+          bool hasValidData = true;
+          int validPixels = 0;
+          int totalPixels = 0;
+          for (int y = 0; y < std::min(10, vtmBufAfter.height); y++) {
+            for (int x = 0; x < std::min(10, vtmBufAfter.width); x++) {
+              Pel value = vtmBufAfter.buf[y * vtmBufAfter.width + x];
+              totalPixels++;
+              if (value >= 0 && value <= 1023) {
+                validPixels++;
+              } else {
+                hasValidData = false;
+                printf("VTM_NN_SR: Invalid data at [%d,%d] = %d\n", x, y, value);
+              }
+            }
+          }
+          printf("VTM_NN_SR: Valid pixels: %d/%d\n", validPixels, totalPixels);
           
 #ifdef VTM_NN_SR_ENABLE
           // DEBUG: Track the scaling process
