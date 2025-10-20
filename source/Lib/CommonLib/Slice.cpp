@@ -4366,17 +4366,19 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   // Exhaustive search: compare VTM vs NN results for luma
-                  // Since we can't easily compare different resolutions, let's use a simpler approach
-                  // For now, always prefer VTM (the proven, well-tuned method) until we implement proper comparison
+                  // Compare both upsampling methods against the original uncompressed input frame at target resolution
+                  // This makes perfect sense: which method better preserves the original content?
+                  const CPelBuf& targetLuma = getPic()->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
                   
-                  // DEBUG: Check dimensions to understand the resolution mismatch
-                  const CPelBuf& originalRefLuma = m_apcRefPicList[refList][rIdx]->unscaledPic->getTrueOrigBuf(COMPONENT_Y);
-                  printf("VTM_NN_SR: Original ref frame dimensions: %dx%d\n", originalRefLuma.width, originalRefLuma.height);
+                  // DEBUG: Check dimensions to verify we have the target resolution
+                  printf("VTM_NN_SR: Target frame dimensions: %dx%d\n", targetLuma.width, targetLuma.height);
                   printf("VTM_NN_SR: Upsampled target dimensions: %dx%d\n", vtmBuf.width, vtmBuf.height);
-                  printf("VTM_NN_SR: Resolution mismatch - cannot compare directly\n");
                   
-                  // For now, use VTM by default (conservative approach)
-                  bool useNN = false;
+                  // Now we can compare at the same resolution!
+                  bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
+                                                   targetLuma.buf, targetLuma.width, targetLuma.height,
+                                                   sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
+                                                   vtmBuf.buf, nnResult);
                   
                   // Choose the better result for luma only
                   if (useNN) {
