@@ -4338,19 +4338,11 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                    sps->getChromaFormatIdc(), sps->getBitDepths(), true, downsampling,
                                    sps->getHorCollocatedChromaFlag(), sps->getVerCollocatedChromaFlag() );
           
-          // CRITICAL: Copy VTM buffer immediately after upsampling to prevent corruption
-          // This must happen before any potential buffer reuse in future iterations
-          Pel* vtmBufferCopy = nullptr;
-          if (!downsampling) {  // Only for upsampling
-            const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
-            const PelBuf& vtmBuf = unitBuf.Y();
-            vtmBufferCopy = new Pel[vtmBuf.width * vtmBuf.height];
-            memcpy(vtmBufferCopy, vtmBuf.buf, vtmBuf.width * vtmBuf.height * sizeof(Pel));
-            printf("VTM_NN_SR: VTM buffer copied immediately after upsampling - POC=%d, ptr=%p, dims=%dx%d\n", 
-                   scaledRefPic[j]->getPOC(), vtmBuf.buf, vtmBuf.width, vtmBuf.height);
-          }
-          
 #ifdef VTM_NN_SR_ENABLE
+          // DEBUG: Track the scaling process
+          printf("VTM_NN_SR: Scaling process - refList=%d, rIdx=%d, POC=%d, j=%d, downsampling=%s\n", 
+                 refList, rIdx, poc, j, downsampling ? "true" : "false");
+          
           // Try NN-based super resolution for luma upsampling only
           if (!downsampling) {  // Only for upsampling, not downsampling
             
@@ -4363,8 +4355,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               // Get the scaled buffer for NN processing
               const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
               PelBuf& vtmBuf = const_cast<PelBuf&>(unitBuf.Y());
-              
-              // Use the already copied VTM buffer from above
+
               
               // Validate dimensions before proceeding
               if (vtmBuf.width <= 0 || vtmBuf.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
@@ -4379,24 +4370,20 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   // Exhaustive search: compare VTM vs NN results for luma
-                  // Compare both upsampling methods against the current frame's original input at target resolution
-                  // This makes sense: which upsampling method produces a result closer to what the current frame should look like?
-                  const CPelBuf& targetLuma = getPic()->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
+                  // Compare both upsampling methods against the original uncompressed input frame at target resolution
+                  // This makes perfect sense: which method better preserves the original content?
+                  // Get the original input of the REFERENCE FRAME at the same timestep
+                  const CPelBuf& targetLuma = m_apcRefPicList[refList][rIdx]->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
                   
                   // DEBUG: Check dimensions to verify we have the target resolution
                   printf("VTM_NN_SR: Target frame dimensions: %dx%d\n", targetLuma.width, targetLuma.height);
                   printf("VTM_NN_SR: Upsampled target dimensions: %dx%d\n", vtmBuf.width, vtmBuf.height);
                   
-                  // DEBUG: Check if target frame is actually changing
-                  printf("VTM_NN_SR: Target frame sample values: [0,0]=%d, [1,1]=%d, [50,50]=%d\n", 
-                         targetLuma.buf[0], targetLuma.buf[1 * targetLuma.width + 1], 
-                         targetLuma.buf[50 * targetLuma.width + 50]);
-                  
-                  // Use the already copied VTM buffer for comparison
+                  // Now we can compare at the same resolution!
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
                                                    targetLuma.buf, targetLuma.width, targetLuma.height,
                                                    sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
-                                                   vtmBufferCopy, nnResult);
+                                                   vtmBuf.buf, nnResult);
                   
                   // Choose the better result for luma only
                   if (useNN) {
@@ -4413,9 +4400,6 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 
                 // Clean up allocated memory
                 delete[] nnResult;
-                if (vtmBufferCopy) {
-                  delete[] vtmBufferCopy;
-                }
               } // End of else block for valid dimensions
             }
           }
