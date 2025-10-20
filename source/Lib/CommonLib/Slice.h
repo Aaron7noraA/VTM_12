@@ -1444,6 +1444,9 @@ private:
   bool              m_saoEnabledFlag;
 
   bool              m_bTemporalIdNestingFlag; // temporal_id_nesting_flag
+  
+  // NN Super Resolution model path
+  std::string       m_srModelPath;
 
   bool              m_scalingListEnabledFlag;
   bool              m_depQuantEnabledFlag;            //!< dependent quantization enabled flag
@@ -1903,6 +1906,10 @@ void                    setCCALFEnabledFlag( bool b )                           
   bool      getScalingMatrixForAlternativeColourSpaceDisabledFlag()           const { return m_scalingMatrixAlternativeColourSpaceDisabledFlag; }
   void      setScalingMatrixDesignatedColourSpaceFlag(bool b)                       { m_scalingMatrixDesignatedColourSpaceFlag = b; }
   bool      getScalingMatrixDesignatedColourSpaceFlag()                       const { return m_scalingMatrixDesignatedColourSpaceFlag; }
+  
+  // NN Super Resolution model path
+  void      setSRModelPath(const std::string& path)                                { m_srModelPath = path; }
+  const std::string& getSRModelPath() const                                        { return m_srModelPath; }
 };
 
 

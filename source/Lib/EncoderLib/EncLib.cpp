@@ -1540,6 +1540,9 @@ void EncLib::xInitSPS( SPS& sps )
   sps.setLog2ParallelMergeLevelMinus2( m_log2ParallelMergeLevelMinus2 );
 
   CHECK(sps.getResChangeInClvsEnabledFlag() && sps.getVirtualBoundariesEnabledFlag(), "when the value of sps_res_change_in_clvs_allowed_flag is equal to 1, the value of sps_virtual_boundaries_present_flag shall be equal to 0");
+
+  // Set NN Super Resolution model path
+  sps.setSRModelPath( m_srModelPath );
 }
 
 void EncLib::xInitHrdParameters(SPS &sps)
