@@ -4380,39 +4380,39 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                        refBuf.width, refBuf.height);
                 // Skip NN processing but continue with VTM default
               } else {
-              
-              Pel* nnResult = new Pel[vtmBuf.width * vtmBuf.height];
-              
-              // Perform NN inference on luma only
-              if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
-                                      nnResult, vtmBuf.width, vtmBuf.height,
-                                      sps->getBitDepths().recon[toChannelType(compID)])) {
+                // Only proceed with NN processing if dimensions are valid
+                Pel* nnResult = new Pel[vtmBuf.width * vtmBuf.height];
                 
-                // Exhaustive search: compare VTM vs NN results for luma
-                // We need the current frame as target for comparison
-                // In RPR, we compare upsampled reference against current frame
-                // For now, we'll use the current picture's luma as target
-                const CPelBuf& currentLuma = getPic()->getRecoBuf().get(COMPONENT_Y);
-                bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
-                                                 currentLuma.buf, currentLuma.width, currentLuma.height,
-                                                 sps->getBitDepths().recon[toChannelType(compID)],
-                                                 vtmBuf.buf, nnResult);
-                
-                // Choose the better result for luma only
-                if (useNN) {
-                  // Copy NN result to final output (luma only)
-                  for (int y = 0; y < vtmBuf.height; y++) {
-                    for (int x = 0; x < vtmBuf.width; x++) {
-                      vtmBuf.at(x, y) = nnResult[y * vtmBuf.width + x];
+                // Perform NN inference on luma only
+                if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
+                                        nnResult, vtmBuf.width, vtmBuf.height,
+                                        sps->getBitDepths().recon[toChannelType(compID)])) {
+                  
+                  // Exhaustive search: compare VTM vs NN results for luma
+                  // We need the current frame as target for comparison
+                  // In RPR, we compare upsampled reference against current frame
+                  // For now, we'll use the current picture's luma as target
+                  const CPelBuf& currentLuma = getPic()->getRecoBuf().get(COMPONENT_Y);
+                  bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
+                                                   currentLuma.buf, currentLuma.width, currentLuma.height,
+                                                   sps->getBitDepths().recon[toChannelType(compID)],
+                                                   vtmBuf.buf, nnResult);
+                  
+                  // Choose the better result for luma only
+                  if (useNN) {
+                    // Copy NN result to final output (luma only)
+                    for (int y = 0; y < vtmBuf.height; y++) {
+                      for (int x = 0; x < vtmBuf.width; x++) {
+                        vtmBuf.at(x, y) = nnResult[y * vtmBuf.width + x];
+                      }
                     }
                   }
+                  // If useNN is false, keep the VTM result (already in vtmBuf)
+                  // Chroma components (U, V) always use VTM's default upsampling
                 }
-                // If useNN is false, keep the VTM result (already in vtmBuf)
-                // Chroma components (U, V) always use VTM's default upsampling
-              }
-              
-              // Clean up allocated memory
-              delete[] nnResult;
+                
+                // Clean up allocated memory
+                delete[] nnResult;
               } // End of else block for valid dimensions
             }
           }
