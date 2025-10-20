@@ -4342,8 +4342,10 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           
           // Check for uninitialized data
           bool hasUninitializedData = false;
-          for (int y = 0; y < std::min(10, vtmBufBefore.height) && !hasUninitializedData; y++) {
-            for (int x = 0; x < std::min(10, vtmBufBefore.width) && !hasUninitializedData; x++) {
+          int checkHeightBefore = (vtmBufBefore.height < 10) ? vtmBufBefore.height : 10;
+          int checkWidthBefore = (vtmBufBefore.width < 10) ? vtmBufBefore.width : 10;
+          for (int y = 0; y < checkHeightBefore && !hasUninitializedData; y++) {
+            for (int x = 0; x < checkWidthBefore && !hasUninitializedData; x++) {
               Pel value = vtmBufBefore.buf[y * vtmBufBefore.width + x];
               if (value < 0 || value > 1023) {
                 hasUninitializedData = true;
@@ -4377,8 +4379,10 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           bool hasValidData = true;
           int validPixels = 0;
           int totalPixels = 0;
-          for (int y = 0; y < std::min(10, vtmBufAfter.height); y++) {
-            for (int x = 0; x < std::min(10, vtmBufAfter.width); x++) {
+          int checkHeight = (vtmBufAfter.height < 10) ? vtmBufAfter.height : 10;
+          int checkWidth = (vtmBufAfter.width < 10) ? vtmBufAfter.width : 10;
+          for (int y = 0; y < checkHeight; y++) {
+            for (int x = 0; x < checkWidth; x++) {
               Pel value = vtmBufAfter.buf[y * vtmBufAfter.width + x];
               totalPixels++;
               if (value >= 0 && value <= 1023) {
