@@ -4351,34 +4351,20 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               // Process only luma component (Y)
               const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y();
               
-              // Get the scaled buffer for NN processing
-              const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
-              PelBuf& vtmBuf = const_cast<PelBuf&>(unitBuf.Y());
-              
-              // Validate VTM upsampling result before proceeding
-              bool vtmBufferCorrupted = false;
-              for (int y = 0; y < vtmBuf.height && !vtmBufferCorrupted; y++) {
-                for (int x = 0; x < vtmBuf.width && !vtmBufferCorrupted; x++) {
-                  Pel value = vtmBuf.buf[y * vtmBuf.width + x];
-                  if (value < 0 || value > 1023) {  // Assuming 10-bit video
-                    vtmBufferCorrupted = true;
-                    printf("VTM corrupted");
-                  }
-                }
-              }
-              
-              if (!vtmBufferCorrupted) {
+              // Get VTM's upsampled result (already written by Picture::rescalePicture)
+              const PelUnitBuf& vtmResult = scaledRefPic[j]->getRecoBuf();
+              const PelBuf& vtmLuma = vtmResult.Y();
               
               // Validate dimensions before proceeding
-              if (vtmBuf.width <= 0 || vtmBuf.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
+              if (vtmLuma.width <= 0 || vtmLuma.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
                 // Skip NN processing but continue with VTM default
               } else {
                 // Only proceed with NN processing if dimensions are valid
-                Pel* nnResult = new Pel[vtmBuf.width * vtmBuf.height];
+                Pel* nnResult = new Pel[vtmLuma.width * vtmLuma.height];
                 
               // Perform NN inference on luma only
               if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
-                                      nnResult, vtmBuf.width, vtmBuf.height,
+                                      nnResult, vtmLuma.width, vtmLuma.height,
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   // Exhaustive search: compare VTM vs NN results for luma
@@ -4392,25 +4378,28 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
                                                    targetLuma.buf, targetLuma.width, targetLuma.height,
                                                    sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
-                                                   vtmBuf.buf, nnResult);
+                                                   vtmLuma.buf, nnResult);
                   
                   // Choose the better result for luma only
                   if (useNN) {
+                    // Get writable reference to final output buffer
+                    PelUnitBuf& finalUnitBuf = scaledRefPic[j]->getRecoBuf();
+                    PelBuf& finalLumaBuf = finalUnitBuf.Y();
+                    
                     // Copy NN result to final output (luma only)
-                    for (int y = 0; y < vtmBuf.height; y++) {
-                      for (int x = 0; x < vtmBuf.width; x++) {
-                        vtmBuf.at(x, y) = nnResult[y * vtmBuf.width + x];
+                    for (int y = 0; y < vtmLuma.height; y++) {
+                      for (int x = 0; x < vtmLuma.width; x++) {
+                        finalLumaBuf.at(x, y) = nnResult[y * vtmLuma.width + x];
                       }
                     }
                   }
-                  // If useNN is false, keep the VTM result (already in vtmBuf)
+                  // If useNN is false, keep the VTM result (already in final buffer)
                   // Chroma components (U, V) always use VTM's default upsampling
                 }
                 
                 // Clean up allocated memory
                 delete[] nnResult;
               } // End of else block for valid dimensions
-              } // End of else block for valid VTM buffer
             }
           }
 #endif
