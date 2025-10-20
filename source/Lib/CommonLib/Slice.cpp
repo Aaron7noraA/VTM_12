@@ -4346,7 +4346,10 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           if (!downsampling) {  // Only for upsampling, not downsampling
             
             SuperResolutionNN srNN;
-            if (srNN.loadModel("models/sr_model.pt")) {
+            {
+              const std::string& srModelPath = getPPS()->pcPic->cs->vps->getEncLib()->getSRModelPath();
+              const char* srPathCStr = srModelPath.c_str();
+              if (srNN.loadModel(srPathCStr)) {
               
               // Process only luma component (Y)
               ComponentID compID = ComponentID( 0 );

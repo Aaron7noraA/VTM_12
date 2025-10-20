@@ -260,6 +260,7 @@ protected:
 
   //====== Coding Structure ========
   int       m_intraPeriod;                        // needs to be signed to allow '-1' for no intra period
+  std::string m_srModelPath;                      // path to NN SR TorchScript model
   uint32_t  m_decodingRefreshType;            ///< the type of decoding refresh employed for the random access.
   bool      m_rewriteParamSets;
   bool      m_idrRefParamList;
@@ -779,6 +780,8 @@ protected:
   bool        m_avoidIntraInDepLayer;
 
 public:
+  void       setSRModelPath( const std::string& p ) { m_srModelPath = p; }
+  const std::string& getSRModelPath() const { return m_srModelPath; }
   EncCfg()
   {
   }

@@ -541,6 +541,8 @@ void EncApp::xInitLibCfg()
   }
   m_cEncLib.setIntraLambdaModifier                               ( m_adIntraLambdaModifier );
   m_cEncLib.setIntraQpFactor                                     ( m_dIntraQpFactor );
+  // NN-SR model path (configurable via cfg/CLI)
+  m_cEncLib.setSRModelPath                                       ( m_srModelPath );
 
   m_cEncLib.setBaseQP                                            ( m_iQP );
 

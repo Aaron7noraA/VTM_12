@@ -4268,7 +4268,9 @@ void EncGOP::xCalculateAddPSNR(Picture* pcPic, PelUnitBuf cPicD, const AccessUni
           targetY.width == vtmUpscaledY.width && targetY.height == vtmUpscaledY.height)
       {
         SuperResolutionNN srNN;
-        if (srNN.loadModel("models/sr_model.pt"))
+        const std::string& srModelPath = m_pcEncLib->getSRModelPath();
+        const char* srPathCStr = srModelPath.c_str();
+        if (srNN.loadModel(srPathCStr))
         {
           Pel* nnResult = new Pel[vtmUpscaledY.width * vtmUpscaledY.height];
           if (srNN.performInference(refLowResY.buf, refLowResY.width, refLowResY.height,
