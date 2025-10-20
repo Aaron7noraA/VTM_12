@@ -4332,11 +4332,17 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           const bool downsampling = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width >= scaledRefPic[j]->getRecoBuf().Y().width && m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height >= scaledRefPic[j]->getRecoBuf().Y().height;
           
           // First, perform VTM's default rescaling
+          printf("VTM_NN_SR: Before VTM rescaling - scaledRefPic[j] dimensions: %dx%d\n",
+                 scaledRefPic[j]->getRecoBuf().Y().width, scaledRefPic[j]->getRecoBuf().Y().height);
+          
           Picture::rescalePicture( m_scalingRatio[refList][rIdx],
                                    m_apcRefPicList[refList][rIdx]->getRecoBuf(), m_apcRefPicList[refList][rIdx]->slices[0]->getPPS()->getScalingWindow(),
                                    scaledRefPic[j]->getRecoBuf(), pps->getScalingWindow(),
                                    sps->getChromaFormatIdc(), sps->getBitDepths(), true, downsampling,
                                    sps->getHorCollocatedChromaFlag(), sps->getVerCollocatedChromaFlag() );
+          
+          printf("VTM_NN_SR: After VTM rescaling - scaledRefPic[j] dimensions: %dx%d\n",
+                 scaledRefPic[j]->getRecoBuf().Y().width, scaledRefPic[j]->getRecoBuf().Y().height);
           
 #ifdef VTM_NN_SR_ENABLE
           // Try NN-based super resolution for luma upsampling only
@@ -4358,11 +4364,37 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               
               // Process only luma component (Y)
               const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y();
-              PelBuf& vtmBuf = scaledRefPic[j]->getRecoBuf().Y();
+              
+              // Try different approaches to get the scaled buffer
+              printf("VTM_NN_SR: Trying different buffer access methods:\n");
+              
+              // Method 1: Direct Y() access
+              const PelBuf& vtmBuf1 = scaledRefPic[j]->getRecoBuf().Y();
+              printf("VTM_NN_SR: Method 1 (Y()): %dx%d\n", vtmBuf1.width, vtmBuf1.height);
+              
+              // Method 2: getRecoBuf() then Y()
+              const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
+              const PelBuf& vtmBuf2 = unitBuf.Y();
+              printf("VTM_NN_SR: Method 2 (unitBuf.Y()): %dx%d\n", vtmBuf2.width, vtmBuf2.height);
+              
+              // Method 3: get(COMPONENT_Y) 
+              const PelBuf& vtmBuf3 = scaledRefPic[j]->getRecoBuf().get(COMPONENT_Y);
+              printf("VTM_NN_SR: Method 3 (get(COMPONENT_Y)): %dx%d\n", vtmBuf3.width, vtmBuf3.height);
+              
+              // Use the method that works
+              PelBuf& vtmBuf = const_cast<PelBuf&>(vtmBuf2); // Use method 2
               
               // Debug: Print dimensions to identify the issue
               printf("VTM_NN_SR: Debug dimensions - refBuf: %dx%d, vtmBuf: %dx%d\n", 
                      refBuf.width, refBuf.height, vtmBuf.width, vtmBuf.height);
+              
+              // Additional debugging for scaledRefPic
+              printf("VTM_NN_SR: scaledRefPic[j]->getRecoBuf() dimensions: %dx%d\n",
+                     scaledRefPic[j]->getRecoBuf().Y().width, scaledRefPic[j]->getRecoBuf().Y().height);
+              printf("VTM_NN_SR: scaledRefPic[j]->getRecoBuf().area(): %dx%d\n",
+                     scaledRefPic[j]->getRecoBuf().area().width, scaledRefPic[j]->getRecoBuf().area().height);
+              printf("VTM_NN_SR: scaledRefPic[j]->getRecoBuf().chromaFormat: %d\n",
+                     scaledRefPic[j]->getRecoBuf().chromaFormat);
               
               // Validate dimensions before proceeding
               if (vtmBuf.width <= 0 || vtmBuf.height <= 0) {
