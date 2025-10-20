@@ -4349,11 +4349,12 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
             if (srNN.loadModel("models/sr_model.pt")) {
               
               // Process only luma component (Y)
-              const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y();
-              
-              // Get VTM's upsampled result (already written by Picture::rescalePicture)
+              ComponentID compID = ComponentID( comp );
+
+              const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().get( compID );
+
               const PelUnitBuf& vtmResult = scaledRefPic[j]->getRecoBuf();
-              const PelBuf& vtmLuma = vtmResult.Y();
+              const PelBuf& vtmLuma = vtmResult.get( compID );
               
               // Validate dimensions before proceeding
               if (vtmLuma.width <= 0 || vtmLuma.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
@@ -4367,10 +4368,6 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                       nnResult, vtmLuma.width, vtmLuma.height,
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
-                  // Exhaustive search: compare VTM vs NN results for luma
-                  // Compare both upsampling methods against the original uncompressed input frame at target resolution
-                  // This makes perfect sense: which method better preserves the original content?
-                  // Get the original input of the REFERENCE FRAME at the same timestep
                   const CPelBuf& targetLuma = m_apcRefPicList[refList][rIdx]->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
                   
                   
