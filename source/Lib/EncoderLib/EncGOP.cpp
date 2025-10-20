@@ -4252,6 +4252,48 @@ void EncGOP::xCalculateAddPSNR(Picture* pcPic, PelUnitBuf cPicD, const AccessUni
     std::pair<int, int> scalingRatio = std::pair<int, int>( xScale, yScale );
 
     Picture::rescalePicture( scalingRatio, picC, pcPic->getScalingWindow(), upscaledRec, pps->getScalingWindow(), format, sps.getBitDepths(), false, false, sps.getHorCollocatedChromaFlag(), sps.getVerCollocatedChromaFlag() );
+
+#if VTM_NN_SR_ENABLE
+    {
+      // NN vs VTM selection for PSNR2 path: overwrite luma in upscaledRec if NN wins
+      const CPelBuf refLowResY = picC.get(COMPONENT_Y);
+      PelBuf        vtmUpscaledY = upscaledRec.get(COMPONENT_Y);
+      const CPelBuf targetY = upscaledOrg; // target full-res original Y
+
+      if (vtmUpscaledY.width > 0 && vtmUpscaledY.height > 0 &&
+          refLowResY.width  > 0 && refLowResY.height  > 0 &&
+          targetY.width == vtmUpscaledY.width && targetY.height == vtmUpscaledY.height)
+      {
+        SuperResolutionNN srNN;
+        if (srNN.loadModel("models/sr_model.pt"))
+        {
+          Pel* nnResult = new Pel[vtmUpscaledY.width * vtmUpscaledY.height];
+          if (srNN.performInference(refLowResY.buf, refLowResY.width, refLowResY.height,
+                                    nnResult, vtmUpscaledY.width, vtmUpscaledY.height,
+                                    sps.getBitDepth(CHANNEL_TYPE_LUMA)))
+          {
+            const bool useNN = srNN.exhaustiveSearch(
+              refLowResY.buf, refLowResY.width, refLowResY.height,
+              targetY.buf, targetY.width, targetY.height, targetY.stride,
+              sps.getBitDepth(CHANNEL_TYPE_LUMA),
+              vtmUpscaledY.buf, vtmUpscaledY.stride,
+              nnResult, vtmUpscaledY.width);
+
+            if (useNN)
+            {
+              for (int y = 0; y < vtmUpscaledY.height; ++y)
+              {
+                Pel*       dst = vtmUpscaledY.buf + y * vtmUpscaledY.stride;
+                const Pel* src = nnResult         + y * vtmUpscaledY.width;
+                std::memcpy(dst, src, vtmUpscaledY.width * sizeof(Pel));
+              }
+            }
+          }
+          delete[] nnResult;
+        }
+      }
+    }
+#endif
   }
 
   for (int comp = 0; comp < ::getNumberValidComponents(formatD); comp++)
