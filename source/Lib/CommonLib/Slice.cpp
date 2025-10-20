@@ -4331,12 +4331,18 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           // rescale the reference picture with NN-based super resolution
           const bool downsampling = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width >= scaledRefPic[j]->getRecoBuf().Y().width && m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height >= scaledRefPic[j]->getRecoBuf().Y().height;
           
+          // DEBUG: Check VTM buffer BEFORE upsampling
+          printf("VTM_NN_SR: Before VTM upsampling - POC=%d, j=%d\n", poc, j);
+          
           // First, perform VTM's default rescaling
           Picture::rescalePicture( m_scalingRatio[refList][rIdx],
                                    m_apcRefPicList[refList][rIdx]->getRecoBuf(), m_apcRefPicList[refList][rIdx]->slices[0]->getPPS()->getScalingWindow(),
                                    scaledRefPic[j]->getRecoBuf(), pps->getScalingWindow(),
                                    sps->getChromaFormatIdc(), sps->getBitDepths(), true, downsampling,
                                    sps->getHorCollocatedChromaFlag(), sps->getVerCollocatedChromaFlag() );
+          
+          // DEBUG: Check VTM buffer AFTER upsampling
+          printf("VTM_NN_SR: After VTM upsampling - POC=%d, j=%d\n", poc, j);
           
 #ifdef VTM_NN_SR_ENABLE
           // DEBUG: Track the scaling process
@@ -4355,7 +4361,28 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               // Get the scaled buffer for NN processing
               const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
               PelBuf& vtmBuf = const_cast<PelBuf&>(unitBuf.Y());
-
+              
+              // CRITICAL: Validate VTM upsampling result before proceeding
+              printf("VTM_NN_SR: VTM buffer validation - POC=%d, ptr=%p, dims=%dx%d\n", 
+                     scaledRefPic[j]->getPOC(), vtmBuf.buf, vtmBuf.width, vtmBuf.height);
+              
+              // Check for VTM buffer corruption
+              bool vtmBufferCorrupted = false;
+              for (int y = 0; y < vtmBuf.height && !vtmBufferCorrupted; y++) {
+                for (int x = 0; x < vtmBuf.width && !vtmBufferCorrupted; x++) {
+                  Pel value = vtmBuf.buf[y * vtmBuf.width + x];
+                  if (value < 0 || value > 1023) {  // Assuming 10-bit video
+                    vtmBufferCorrupted = true;
+                    printf("VTM_NN_SR: VTM buffer corrupted at [%d,%d] = %d\n", x, y, value);
+                  }
+                }
+              }
+              
+              if (vtmBufferCorrupted) {
+                printf("VTM_NN_SR: VTM buffer is corrupted, skipping NN processing\n");
+                // Skip NN processing but continue with VTM default
+              } else {
+                printf("VTM_NN_SR: VTM buffer is valid, proceeding with NN processing\n");
               
               // Validate dimensions before proceeding
               if (vtmBuf.width <= 0 || vtmBuf.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
@@ -4401,6 +4428,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 // Clean up allocated memory
                 delete[] nnResult;
               } // End of else block for valid dimensions
+              } // End of else block for valid VTM buffer
             }
           }
 #endif
