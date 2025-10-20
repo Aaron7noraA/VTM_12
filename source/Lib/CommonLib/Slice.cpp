@@ -4366,12 +4366,11 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   // Exhaustive search: compare VTM vs NN results for luma
-                  // We need the current frame as target for comparison
-                  // In RPR, we compare upsampled reference against current frame
-                  // For now, we'll use the current picture's luma as target
-                  const CPelBuf& currentLuma = getPic()->getRecoBuf().Y();
+                  // In RPR, we compare upsampled reference against the original input frame
+                  // This makes sense: which upsampling method produces a result closer to the original?
+                  const CPelBuf& originalLuma = getPic()->getTrueOrigBuf(COMPONENT_Y);
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
-                                                   currentLuma.buf, currentLuma.width, currentLuma.height,
+                                                   originalLuma.buf, originalLuma.width, originalLuma.height,
                                                    sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
                                                    vtmBuf.buf, nnResult);
                   
