@@ -79,15 +79,14 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   return true;
 }
 
-double SuperResolutionNN::calculateMSE(const Pel* block1, const Pel* block2, int width, int height)
+double SuperResolutionNN::calculateMSE(const Pel* a, int aStride, const Pel* b, int bStride, int width, int height)
 {
   // Safety checks
-  if (!block1 || !block2)
+  if (!a || !b)
   {
-    printf("ERROR: Null pointer in calculateMSE! block1=%p, block2=%p\n", block1, block2);
+    printf("ERROR: Null pointer in calculateMSE! a=%p, b=%p\n", a, b);
     return 999999.0; // Return high MSE to indicate error
   }
-  
   if (width <= 0 || height <= 0)
   {
     printf("ERROR: Invalid dimensions in calculateMSE: %dx%d\n", width, height);
@@ -96,24 +95,24 @@ double SuperResolutionNN::calculateMSE(const Pel* block1, const Pel* block2, int
   
   double mse = 0.0;
   int pixelCount = 0;
-  
-  for (int y = 0; y < height; y++)
+  for (int y = 0; y < height; ++y)
   {
-    for (int x = 0; x < width; x++)
+    const Pel* rowA = a + y * aStride;
+    const Pel* rowB = b + y * bStride;
+    for (int x = 0; x < width; ++x)
     {
-      int idx = y * width + x;
-      double diff = static_cast<double>(block1[idx]) - static_cast<double>(block2[idx]);
-      mse += diff * diff;
-      pixelCount++;
+      const int d = int(rowA[x]) - int(rowB[x]);
+      mse += double(d) * double(d);
+      ++pixelCount;
     }
   }
-  
   return (pixelCount > 0) ? (mse / pixelCount) : 0.0;
 }
 
 bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int refHeight,
-                                       const Pel* targetFrame, int targetWidth, int targetHeight,
-                                       int bitDepth, Pel* vtmResult, Pel* nnResult)
+                                       const Pel* targetFrame, int targetWidth, int targetHeight, int targetStride,
+                                       int bitDepth, const Pel* vtmResult, int vtmStride,
+                                       const Pel* nnResult, int nnStride)
 {
   if (!m_modelLoaded)
   {
@@ -145,9 +144,9 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
   
   // Calculate MSE between each result and the target frame
   printf("Calculating VTM MSE...\n");
-  double vtmMSE = calculateMSE(targetFrame, vtmResult, targetWidth, targetHeight);
+  double vtmMSE = calculateMSE(targetFrame, targetStride, vtmResult, vtmStride, targetWidth, targetHeight);
   printf("Calculating NN MSE...\n");
-  double nnMSE = calculateMSE(targetFrame, nnResult, targetWidth, targetHeight);
+  double nnMSE = calculateMSE(targetFrame, targetStride, nnResult, nnStride, targetWidth, targetHeight);
   
   // DEBUG: Sample some pixel values to verify data integrity
   printf("DEBUG: Sample pixel values:\n");

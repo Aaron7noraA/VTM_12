@@ -31,12 +31,13 @@ public:
                        int bitDepth);
   
   // Utility functions
-  double calculateMSE(const Pel* block1, const Pel* block2, int width, int height);
+  double calculateMSE(const Pel* a, int aStride, const Pel* b, int bStride, int width, int height);
   
   // Exhaustive search algorithm
   bool exhaustiveSearch(const Pel* refBlock, int refWidth, int refHeight,
-                       const Pel* targetFrame, int targetWidth, int targetHeight,
-                       int bitDepth, Pel* vtmResult, Pel* nnResult);
+                       const Pel* targetFrame, int targetWidth, int targetHeight, int targetStride,
+                       int bitDepth, const Pel* vtmResult, int vtmStride,
+                       const Pel* nnResult, int nnStride);
   
 private:
   // LibTorch-specific helper functions

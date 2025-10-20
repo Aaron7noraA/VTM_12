@@ -4349,7 +4349,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
             if (srNN.loadModel("models/sr_model.pt")) {
               
               // Process only luma component (Y)
-              ComponentID compID = ComponentID( comp );
+              ComponentID compID = ComponentID( 0 );
 
               const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().get( compID );
 
@@ -4373,9 +4373,10 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   
                   // Now we can compare at the same resolution!
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
-                                                   targetLuma.buf, targetLuma.width, targetLuma.height,
+                                                   targetLuma.buf, targetLuma.width, targetLuma.height, targetLuma.stride,
                                                    sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
-                                                   vtmLuma.buf, nnResult);
+                                                   vtmLuma.buf, vtmLuma.stride,
+                                                   nnResult, vtmLuma.width);
                   
                   // Choose the better result for luma only
                   if (useNN) {
@@ -4383,11 +4384,11 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                     PelUnitBuf finalUnitBuf = scaledRefPic[j]->getRecoBuf();
                     PelBuf finalLumaBuf = finalUnitBuf.Y();
                     
-                    // Copy NN result to final output (luma only)
-                    for (int y = 0; y < vtmLuma.height; y++) {
-                      for (int x = 0; x < vtmLuma.width; x++) {
-                        finalLumaBuf.at(x, y) = nnResult[y * vtmLuma.width + x];
-                      }
+                    // Copy NN result to final output (luma only), respecting stride
+                    for (int y = 0; y < vtmLuma.height; ++y) {
+                      Pel*       dst = finalLumaBuf.buf + y * finalLumaBuf.stride;
+                      const Pel* src = nnResult        + y * vtmLuma.width;
+                      std::memcpy(dst, src, vtmLuma.width * sizeof(Pel));
                     }
                   }
                   // If useNN is false, keep the VTM result (already in final buffer)
