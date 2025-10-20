@@ -4332,32 +4332,15 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           const bool downsampling = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width >= scaledRefPic[j]->getRecoBuf().Y().width && m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height >= scaledRefPic[j]->getRecoBuf().Y().height;
           
           // First, perform VTM's default rescaling
-          printf("VTM_NN_SR: Before VTM rescaling - scaledRefPic[j] dimensions: %dx%d\n",
-                 scaledRefPic[j]->getRecoBuf().Y().width, scaledRefPic[j]->getRecoBuf().Y().height);
-          
           Picture::rescalePicture( m_scalingRatio[refList][rIdx],
                                    m_apcRefPicList[refList][rIdx]->getRecoBuf(), m_apcRefPicList[refList][rIdx]->slices[0]->getPPS()->getScalingWindow(),
                                    scaledRefPic[j]->getRecoBuf(), pps->getScalingWindow(),
                                    sps->getChromaFormatIdc(), sps->getBitDepths(), true, downsampling,
                                    sps->getHorCollocatedChromaFlag(), sps->getVerCollocatedChromaFlag() );
           
-          printf("VTM_NN_SR: After VTM rescaling - scaledRefPic[j] dimensions: %dx%d\n",
-                 scaledRefPic[j]->getRecoBuf().Y().width, scaledRefPic[j]->getRecoBuf().Y().height);
-          
 #ifdef VTM_NN_SR_ENABLE
           // Try NN-based super resolution for luma upsampling only
           if (!downsampling) {  // Only for upsampling, not downsampling
-            printf("VTM_NN_SR: Processing reference frame %d (refList=%d, rIdx=%d)\n", rIdx, refList, rIdx);
-            printf("VTM_NN_SR: Original ref pic dimensions: %dx%d\n", 
-                   m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width,
-                   m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height);
-            printf("VTM_NN_SR: Scaled ref pic dimensions: %dx%d\n", 
-                   scaledRefPic[j]->getRecoBuf().Y().width,
-                   scaledRefPic[j]->getRecoBuf().Y().height);
-            printf("VTM_NN_SR: Scaling ratio: %d:%d\n", 
-                   m_scalingRatio[refList][rIdx].first, m_scalingRatio[refList][rIdx].second);
-            printf("VTM_NN_SR: downsampling flag: %s\n", downsampling ? "true" : "false");
-            printf("VTM_NN_SR: scaledRefPic[j] valid: %s\n", scaledRefPic[j] ? "yes" : "no");
             
             SuperResolutionNN srNN;
             if (srNN.loadModel("models/sr_model.pt")) {
@@ -4365,42 +4348,13 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               // Process only luma component (Y)
               const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y();
               
-              // Try different approaches to get the scaled buffer
-              printf("VTM_NN_SR: Trying different buffer access methods:\n");
-              
-              // Method 1: Direct Y() access
-              const PelBuf& vtmBuf1 = scaledRefPic[j]->getRecoBuf().Y();
-              printf("VTM_NN_SR: Method 1 (Y()): %dx%d\n", vtmBuf1.width, vtmBuf1.height);
-              
-              // Method 2: getRecoBuf() then Y()
+              // Get the scaled buffer for NN processing
               const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
-              const PelBuf& vtmBuf2 = unitBuf.Y();
-              printf("VTM_NN_SR: Method 2 (unitBuf.Y()): %dx%d\n", vtmBuf2.width, vtmBuf2.height);
-              
-              // Method 3: get(COMPONENT_Y) 
-              const PelBuf& vtmBuf3 = scaledRefPic[j]->getRecoBuf().get(COMPONENT_Y);
-              printf("VTM_NN_SR: Method 3 (get(COMPONENT_Y)): %dx%d\n", vtmBuf3.width, vtmBuf3.height);
-              
-              // Use the method that works - we need to get a mutable reference
-              PelUnitBuf& mutableUnitBuf = scaledRefPic[j]->getRecoBuf();
-              PelBuf& vtmBuf = mutableUnitBuf.Y();
-              
-              // Debug: Print dimensions to identify the issue
-              printf("VTM_NN_SR: Debug dimensions - refBuf: %dx%d, vtmBuf: %dx%d\n", 
-                     refBuf.width, refBuf.height, vtmBuf.width, vtmBuf.height);
+              PelBuf& vtmBuf = const_cast<PelBuf&>(unitBuf.Y());
 
               
               // Validate dimensions before proceeding
-              if (vtmBuf.width <= 0 || vtmBuf.height <= 0) {
-                printf("VTM_NN_SR: ERROR - Invalid vtmBuf dimensions: %dx%d. Skipping NN processing.\n", 
-                       vtmBuf.width, vtmBuf.height);
-                printf("VTM_NN_SR: This might indicate the scaled reference picture wasn't properly initialized.\n");
-                printf("VTM_NN_SR: scaledRefPic[j] pointer: %p\n", scaledRefPic[j]);
-
-                // Skip NN processing but continue with VTM default
-              } else if (refBuf.width <= 0 || refBuf.height <= 0) {
-                printf("VTM_NN_SR: ERROR - Invalid refBuf dimensions: %dx%d. Skipping NN processing.\n", 
-                       refBuf.width, refBuf.height);
+              if (vtmBuf.width <= 0 || vtmBuf.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
                 // Skip NN processing but continue with VTM default
               } else {
                 // Only proceed with NN processing if dimensions are valid
