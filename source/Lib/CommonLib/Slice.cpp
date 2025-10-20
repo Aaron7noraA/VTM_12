@@ -4331,33 +4331,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           // rescale the reference picture with NN-based super resolution
           const bool downsampling = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width >= scaledRefPic[j]->getRecoBuf().Y().width && m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height >= scaledRefPic[j]->getRecoBuf().Y().height;
           
-          // DEBUG: Check VTM buffer BEFORE upsampling
-          printf("VTM_NN_SR: Before VTM upsampling - POC=%d, j=%d\n", poc, j);
-          
-          // Check if VTM buffer is properly initialized
-          const PelUnitBuf& unitBufBefore = scaledRefPic[j]->getRecoBuf();
-          const PelBuf& vtmBufBefore = unitBufBefore.Y();
-          printf("VTM_NN_SR: VTM buffer before upsampling - ptr=%p, dims=%dx%d\n", 
-                 vtmBufBefore.buf, vtmBufBefore.width, vtmBufBefore.height);
-          
-          // Check for uninitialized data
-          bool hasUninitializedData = false;
-          int checkHeightBefore = (vtmBufBefore.height < 10) ? vtmBufBefore.height : 10;
-          int checkWidthBefore = (vtmBufBefore.width < 10) ? vtmBufBefore.width : 10;
-          for (int y = 0; y < checkHeightBefore && !hasUninitializedData; y++) {
-            for (int x = 0; x < checkWidthBefore && !hasUninitializedData; x++) {
-              Pel value = vtmBufBefore.buf[y * vtmBufBefore.width + x];
-              if (value < 0 || value > 1023) {
-                hasUninitializedData = true;
-                printf("VTM_NN_SR: Uninitialized data at [%d,%d] = %d\n", x, y, value);
-              }
-            }
-          }
-          if (hasUninitializedData) {
-            printf("VTM_NN_SR: VTM buffer has uninitialized data before upsampling!\n");
-          } else {
-            printf("VTM_NN_SR: VTM buffer appears initialized before upsampling\n");
-          }
+          // DEBUG: About to perform VTM upsampling
+          printf("VTM_NN_SR: About to perform VTM upsampling - POC=%d, j=%d\n", poc, j);
           
           // First, perform VTM's default rescaling
           Picture::rescalePicture( m_scalingRatio[refList][rIdx],
