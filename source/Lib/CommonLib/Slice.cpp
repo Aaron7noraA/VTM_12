@@ -4357,9 +4357,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
             if (srNN.loadModel("models/sr_model.pt")) {
               
               // Process only luma component (Y)
-              ComponentID compID = COMPONENT_Y;
-              const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID);
-              PelBuf& vtmBuf = scaledRefPic[j]->getRecoBuf().get(compID);
+              const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y();
+              PelBuf& vtmBuf = scaledRefPic[j]->getRecoBuf().Y();
               
               // Debug: Print dimensions to identify the issue
               printf("VTM_NN_SR: Debug dimensions - refBuf: %dx%d, vtmBuf: %dx%d\n", 
@@ -4371,9 +4370,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                        vtmBuf.width, vtmBuf.height);
                 printf("VTM_NN_SR: This might indicate the scaled reference picture wasn't properly initialized.\n");
                 printf("VTM_NN_SR: scaledRefPic[j] pointer: %p\n", scaledRefPic[j]);
-                if (scaledRefPic[j]) {
-                  printf("VTM_NN_SR: scaledRefPic[j]->getRecoBuf() pointer: %p\n", &scaledRefPic[j]->getRecoBuf());
-                }
+
                 // Skip NN processing but continue with VTM default
               } else if (refBuf.width <= 0 || refBuf.height <= 0) {
                 printf("VTM_NN_SR: ERROR - Invalid refBuf dimensions: %dx%d. Skipping NN processing.\n", 
@@ -4383,19 +4380,19 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 // Only proceed with NN processing if dimensions are valid
                 Pel* nnResult = new Pel[vtmBuf.width * vtmBuf.height];
                 
-                // Perform NN inference on luma only
-                if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
-                                        nnResult, vtmBuf.width, vtmBuf.height,
-                                        sps->getBitDepths().recon[toChannelType(compID)])) {
+              // Perform NN inference on luma only
+              if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
+                                      nnResult, vtmBuf.width, vtmBuf.height,
+                                      sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   // Exhaustive search: compare VTM vs NN results for luma
                   // We need the current frame as target for comparison
                   // In RPR, we compare upsampled reference against current frame
                   // For now, we'll use the current picture's luma as target
-                  const CPelBuf& currentLuma = getPic()->getRecoBuf().get(COMPONENT_Y);
+                  const CPelBuf& currentLuma = getPic()->getRecoBuf().Y();
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
                                                    currentLuma.buf, currentLuma.width, currentLuma.height,
-                                                   sps->getBitDepths().recon[toChannelType(compID)],
+                                                   sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
                                                    vtmBuf.buf, nnResult);
                   
                   // Choose the better result for luma only
