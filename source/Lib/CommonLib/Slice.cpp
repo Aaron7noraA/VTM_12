@@ -46,6 +46,7 @@
 #endif
 
 #include "UnitTools.h"
+#include <cstring>
 
 //! \ingroup CommonLib
 //! \{
@@ -4384,11 +4385,18 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   printf("VTM_NN_SR: Target frame POC=%d, Current frame POC=%d\n", 
                          getPic()->getPOC(), getPOC());
                   
+                  // Create a copy of VTM result to prevent buffer corruption
+                  Pel* vtmResultCopy = new Pel[vtmBuf.width * vtmBuf.height];
+                  memcpy(vtmResultCopy, vtmBuf.buf, vtmBuf.width * vtmBuf.height * sizeof(Pel));
+                  
                   // Now we can compare at the same resolution!
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
                                                    targetLuma.buf, targetLuma.width, targetLuma.height,
                                                    sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
-                                                   vtmBuf.buf, nnResult);
+                                                   vtmResultCopy, nnResult);
+                  
+                  // Clean up the copy
+                  delete[] vtmResultCopy;
                   
                   // Choose the better result for luma only
                   if (useNN) {
