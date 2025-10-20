@@ -4331,8 +4331,6 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
           // rescale the reference picture with NN-based super resolution
           const bool downsampling = m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().width >= scaledRefPic[j]->getRecoBuf().Y().width && m_apcRefPicList[refList][rIdx]->getRecoBuf().Y().height >= scaledRefPic[j]->getRecoBuf().Y().height;
           
-          // DEBUG: About to perform VTM upsampling
-          printf("VTM_NN_SR: About to perform VTM upsampling - POC=%d, j=%d\n", poc, j);
           
           // First, perform VTM's default rescaling
           Picture::rescalePicture( m_scalingRatio[refList][rIdx],
@@ -4341,39 +4339,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                    sps->getChromaFormatIdc(), sps->getBitDepths(), true, downsampling,
                                    sps->getHorCollocatedChromaFlag(), sps->getVerCollocatedChromaFlag() );
           
-          // DEBUG: Check VTM buffer AFTER upsampling
-          printf("VTM_NN_SR: After VTM upsampling - POC=%d, j=%d\n", poc, j);
-          
-          // Check the buffer that VTM just wrote to
-          const PelUnitBuf& unitBufAfter = scaledRefPic[j]->getRecoBuf();
-          const PelBuf& vtmBufAfter = unitBufAfter.Y();
-          printf("VTM_NN_SR: VTM buffer after upsampling - ptr=%p, dims=%dx%d\n", 
-                 vtmBufAfter.buf, vtmBufAfter.width, vtmBufAfter.height);
-          
-          // Check if VTM actually wrote valid data
-          bool hasValidData = true;
-          int validPixels = 0;
-          int totalPixels = 0;
-          int checkHeight = (vtmBufAfter.height < 10) ? vtmBufAfter.height : 10;
-          int checkWidth = (vtmBufAfter.width < 10) ? vtmBufAfter.width : 10;
-          for (int y = 0; y < checkHeight; y++) {
-            for (int x = 0; x < checkWidth; x++) {
-              Pel value = vtmBufAfter.buf[y * vtmBufAfter.width + x];
-              totalPixels++;
-              if (value >= 0 && value <= 1023) {
-                validPixels++;
-              } else {
-                hasValidData = false;
-                printf("VTM_NN_SR: Invalid data at [%d,%d] = %d\n", x, y, value);
-              }
-            }
-          }
-          printf("VTM_NN_SR: Valid pixels: %d/%d\n", validPixels, totalPixels);
           
 #ifdef VTM_NN_SR_ENABLE
-          // DEBUG: Track the scaling process
-          printf("VTM_NN_SR: Scaling process - refList=%d, rIdx=%d, POC=%d, j=%d, downsampling=%s\n", 
-                 refList, rIdx, poc, j, downsampling ? "true" : "false");
           
           // Try NN-based super resolution for luma upsampling only
           if (!downsampling) {  // Only for upsampling, not downsampling
@@ -4388,27 +4355,19 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
               PelBuf& vtmBuf = const_cast<PelBuf&>(unitBuf.Y());
               
-              // CRITICAL: Validate VTM upsampling result before proceeding
-              printf("VTM_NN_SR: VTM buffer validation - POC=%d, ptr=%p, dims=%dx%d\n", 
-                     scaledRefPic[j]->getPOC(), vtmBuf.buf, vtmBuf.width, vtmBuf.height);
-              
-              // Check for VTM buffer corruption
+              // Validate VTM upsampling result before proceeding
               bool vtmBufferCorrupted = false;
               for (int y = 0; y < vtmBuf.height && !vtmBufferCorrupted; y++) {
                 for (int x = 0; x < vtmBuf.width && !vtmBufferCorrupted; x++) {
                   Pel value = vtmBuf.buf[y * vtmBuf.width + x];
                   if (value < 0 || value > 1023) {  // Assuming 10-bit video
                     vtmBufferCorrupted = true;
-                    printf("VTM_NN_SR: VTM buffer corrupted at [%d,%d] = %d\n", x, y, value);
+                    printf("VTM corrupted");
                   }
                 }
               }
               
-              if (vtmBufferCorrupted) {
-                printf("VTM_NN_SR: VTM buffer is corrupted, skipping NN processing\n");
-                // Skip NN processing but continue with VTM default
-              } else {
-                printf("VTM_NN_SR: VTM buffer is valid, proceeding with NN processing\n");
+              if (!vtmBufferCorrupted) {
               
               // Validate dimensions before proceeding
               if (vtmBuf.width <= 0 || vtmBuf.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
@@ -4428,9 +4387,6 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   // Get the original input of the REFERENCE FRAME at the same timestep
                   const CPelBuf& targetLuma = m_apcRefPicList[refList][rIdx]->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
                   
-                  // DEBUG: Check dimensions to verify we have the target resolution
-                  printf("VTM_NN_SR: Target frame dimensions: %dx%d\n", targetLuma.width, targetLuma.height);
-                  printf("VTM_NN_SR: Upsampled target dimensions: %dx%d\n", vtmBuf.width, vtmBuf.height);
                   
                   // Now we can compare at the same resolution!
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
