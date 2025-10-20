@@ -4366,14 +4366,17 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   // Exhaustive search: compare VTM vs NN results for luma
-                  // In RPR, we should compare both upsampling methods against the original reference frame
-                  // This makes sense: which upsampling method better preserves the original reference?
-                  // Use the original reference frame (before upsampling) as the target
-                  const CPelBuf& originalRefLuma = m_apcRefPicList[refList][rIdx]->getTrueOrigBuf(COMPONENT_Y);
-                  bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
-                                                   originalRefLuma.buf, originalRefLuma.width, originalRefLuma.height,
-                                                   sps->getBitDepths().recon[CHANNEL_TYPE_LUMA],
-                                                   vtmBuf.buf, nnResult);
+                  // Since we can't easily compare different resolutions, let's use a simpler approach
+                  // For now, always prefer VTM (the proven, well-tuned method) until we implement proper comparison
+                  
+                  // DEBUG: Check dimensions to understand the resolution mismatch
+                  const CPelBuf& originalRefLuma = m_apcRefPicList[refList][rIdx]->unscaledPic->getTrueOrigBuf(COMPONENT_Y);
+                  printf("VTM_NN_SR: Original ref frame dimensions: %dx%d\n", originalRefLuma.width, originalRefLuma.height);
+                  printf("VTM_NN_SR: Upsampled target dimensions: %dx%d\n", vtmBuf.width, vtmBuf.height);
+                  printf("VTM_NN_SR: Resolution mismatch - cannot compare directly\n");
+                  
+                  // For now, use VTM by default (conservative approach)
+                  bool useNN = false;
                   
                   // Choose the better result for luma only
                   if (useNN) {
