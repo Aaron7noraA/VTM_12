@@ -58,6 +58,9 @@
 #include "CommonLib/ProfileLevelTier.h"
 
 #include "DecoderLib/DecLib.h"
+#if VTM_NN_SR_ENABLE
+#include "CommonLib/SuperResolutionNN.h"
+#endif
 
 using namespace std;
 
