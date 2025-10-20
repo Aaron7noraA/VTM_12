@@ -4382,9 +4382,9 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   
                   // Choose the better result for luma only
                   if (useNN) {
-                    // Get writable reference to final output buffer
-                    PelUnitBuf& finalUnitBuf = scaledRefPic[j]->getRecoBuf();
-                    PelBuf& finalLumaBuf = finalUnitBuf.Y();
+                    // Get writable reference to final output buffer (non-const version)
+                    PelUnitBuf finalUnitBuf = scaledRefPic[j]->getRecoBuf();
+                    PelBuf finalLumaBuf = finalUnitBuf.Y();
                     
                     // Copy NN result to final output (luma only)
                     for (int y = 0; y < vtmLuma.height; y++) {
