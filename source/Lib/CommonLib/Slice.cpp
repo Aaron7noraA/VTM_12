@@ -4351,6 +4351,14 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               // Get the scaled buffer for NN processing
               const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
               PelBuf& vtmBuf = const_cast<PelBuf&>(unitBuf.Y());
+              
+              // DEBUG: Track VTM buffer state and frame context
+              printf("VTM_NN_SR: Processing frame - POC=%d, refList=%d, rIdx=%d\n", 
+                     getPOC(), refList, rIdx);
+              printf("VTM_NN_SR: VTM buffer info - ptr=%p, dims=%dx%d, stride=%d\n", 
+                     vtmBuf.buf, vtmBuf.width, vtmBuf.height, vtmBuf.stride);
+              printf("VTM_NN_SR: Current frame POC=%d, Reference frame POC=%d\n", 
+                     getPOC(), m_apcRefPicList[refList][rIdx]->getPOC());
 
               
               // Validate dimensions before proceeding
@@ -4373,6 +4381,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   // DEBUG: Check dimensions to verify we have the target resolution
                   printf("VTM_NN_SR: Target frame dimensions: %dx%d\n", targetLuma.width, targetLuma.height);
                   printf("VTM_NN_SR: Upsampled target dimensions: %dx%d\n", vtmBuf.width, vtmBuf.height);
+                  printf("VTM_NN_SR: Target frame POC=%d, Current frame POC=%d\n", 
+                         getPic()->getPOC(), getPOC());
                   
                   // Now we can compare at the same resolution!
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,

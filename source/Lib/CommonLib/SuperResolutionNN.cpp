@@ -1,4 +1,5 @@
 #include "SuperResolutionNN.h"
+#include <algorithm>
 
 SuperResolutionNN::SuperResolutionNN()
   : m_modelLoaded(false)
@@ -156,6 +157,18 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
          targetFrame[100 * targetWidth + 100], 
          vtmResult[100 * targetWidth + 100], 
          nnResult[100 * targetWidth + 100]);
+  
+  // DEBUG: Check for potential buffer corruption
+  printf("DEBUG: Buffer integrity check:\n");
+  printf("  VTM result range: min=%d, max=%d\n", 
+         *std::min_element(vtmResult, vtmResult + targetWidth * targetHeight),
+         *std::max_element(vtmResult, vtmResult + targetWidth * targetHeight));
+  printf("  NN result range: min=%d, max=%d\n", 
+         *std::min_element(nnResult, nnResult + targetWidth * targetHeight),
+         *std::max_element(nnResult, nnResult + targetWidth * targetHeight));
+  printf("  Target range: min=%d, max=%d\n", 
+         *std::min_element(targetFrame, targetFrame + targetWidth * targetHeight),
+         *std::max_element(targetFrame, targetFrame + targetWidth * targetHeight));
   
   // Print both MSE values for comparison
   printf("Exhaustive Search MSE Comparison:\n");
