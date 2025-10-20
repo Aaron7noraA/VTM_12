@@ -1,5 +1,6 @@
 #include "SuperResolutionNN.h"
 #include <algorithm>
+#include <cmath>
 
 SuperResolutionNN::SuperResolutionNN()
   : m_modelLoaded(false)
@@ -164,6 +165,21 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
          targetFrame[1 * targetWidth + 1], vtmResult[1 * targetWidth + 1], nnResult[1 * targetWidth + 1]);
   printf("  Target[50,50]: %d, VTM[50,50]: %d, NN[50,50]: %d\n", 
          targetFrame[50 * targetWidth + 50], vtmResult[50 * targetWidth + 50], nnResult[50 * targetWidth + 50]);
+  
+  // DEBUG: Check if the issue is with the calculateMSE function itself
+  printf("DEBUG: Manual MSE calculation test:\n");
+  double manualMSE = 0.0;
+  int testPixels = 0;
+  for (int y = 0; y < std::min(10, targetHeight); y++) {
+    for (int x = 0; x < std::min(10, targetWidth); x++) {
+      int idx = y * targetWidth + x;
+      double diff = static_cast<double>(targetFrame[idx]) - static_cast<double>(vtmResult[idx]);
+      manualMSE += diff * diff;
+      testPixels++;
+    }
+  }
+  manualMSE /= testPixels;
+  printf("  Manual MSE (first 10x10 pixels): %.6f\n", manualMSE);
   
   // DEBUG: Check for potential buffer corruption
   printf("DEBUG: Buffer integrity check:\n");

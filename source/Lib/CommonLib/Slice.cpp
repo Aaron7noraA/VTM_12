@@ -4338,6 +4338,18 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                                    sps->getChromaFormatIdc(), sps->getBitDepths(), true, downsampling,
                                    sps->getHorCollocatedChromaFlag(), sps->getVerCollocatedChromaFlag() );
           
+          // CRITICAL: Copy VTM buffer immediately after upsampling to prevent corruption
+          // This must happen before any potential buffer reuse in future iterations
+          Pel* vtmBufferCopy = nullptr;
+          if (!downsampling) {  // Only for upsampling
+            const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
+            const PelBuf& vtmBuf = unitBuf.Y();
+            vtmBufferCopy = new Pel[vtmBuf.width * vtmBuf.height];
+            memcpy(vtmBufferCopy, vtmBuf.buf, vtmBuf.width * vtmBuf.height * sizeof(Pel));
+            printf("VTM_NN_SR: VTM buffer copied immediately after upsampling - POC=%d, ptr=%p, dims=%dx%d\n", 
+                   scaledRefPic[j]->getPOC(), vtmBuf.buf, vtmBuf.width, vtmBuf.height);
+          }
+          
 #ifdef VTM_NN_SR_ENABLE
           // Try NN-based super resolution for luma upsampling only
           if (!downsampling) {  // Only for upsampling, not downsampling
@@ -4352,13 +4364,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               const PelUnitBuf& unitBuf = scaledRefPic[j]->getRecoBuf();
               PelBuf& vtmBuf = const_cast<PelBuf&>(unitBuf.Y());
               
-              // CRITICAL: Copy VTM buffer immediately after upsampling to prevent corruption
-              // This is essential because VTM reuses scaledRefPic buffers between iterations!
-              printf("VTM_NN_SR: Copying VTM buffer - POC=%d, ptr=%p, width=%d, height=%d\n", 
-                     scaledRefPic[j]->getPOC(), vtmBuf.buf, vtmBuf.width, vtmBuf.height);
-              Pel* vtmBufferCopy = new Pel[vtmBuf.width * vtmBuf.height];
-              memcpy(vtmBufferCopy, vtmBuf.buf, vtmBuf.width * vtmBuf.height * sizeof(Pel));
-              printf("VTM_NN_SR: VTM buffer copied successfully - width=%d, height=%d\n", vtmBuf.width, vtmBuf.height);
+              // Use the already copied VTM buffer from above
               
               // Validate dimensions before proceeding
               if (vtmBuf.width <= 0 || vtmBuf.height <= 0 || refBuf.width <= 0 || refBuf.height <= 0) {
@@ -4407,7 +4413,9 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 
                 // Clean up allocated memory
                 delete[] nnResult;
-                delete[] vtmBufferCopy;
+                if (vtmBufferCopy) {
+                  delete[] vtmBufferCopy;
+                }
               } // End of else block for valid dimensions
             }
           }
