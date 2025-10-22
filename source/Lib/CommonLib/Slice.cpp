@@ -4347,8 +4347,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
             
             SuperResolutionNN srNN;
             {
-              // Get model path from EncLib (passed through encoder configuration)
-              const std::string& srModelPath = getPPS()->pcPic->cs->vps->getEncLib()->getSRModelPath();
+              // Get model path from SPS (passed through encoder configuration)
+              const std::string& srModelPath = getSPS()->getSRModelPath();
               const char* srPathCStr = srModelPath.c_str();
               if (srNN.loadModel(srPathCStr)) {
               
@@ -4367,6 +4367,16 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 // Only proceed with NN processing if dimensions are valid
                 Pel* nnResult = new Pel[vtmLuma.width * vtmLuma.height];
                 
+              // Debug: Print dimensions
+              printf("Slice.cpp DEBUG: refBuf [%d, %d], vtmLuma [%d, %d]\n", 
+                     refBuf.width, refBuf.height, vtmLuma.width, vtmLuma.height);
+              printf("Slice.cpp DEBUG: scaling = %d (vtmLuma.width/refBuf.width)\n", 
+                     vtmLuma.width / refBuf.width);
+              printf("Slice.cpp DEBUG: Expected downsampled should be ~100x60, but got %dx%d\n", 
+                     refBuf.width, refBuf.height);
+              printf("Slice.cpp DEBUG: VTM upsampled to %dx%d\n", 
+                     vtmLuma.width, vtmLuma.height);
+              
               // Perform NN inference on luma only
               if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height, refBuf.stride,
                                       nnResult, vtmLuma.width, vtmLuma.height,
