@@ -53,9 +53,34 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   printf("\n");
 
   // Convert input to tensor using the provided stride
-  // pelArrayToTensor will handle cropping VTM's padded regions
   torch::Tensor inputTensor = pelArrayToTensor(inputData, inputWidth, inputHeight, bitDepth, inputStride);
   
+  // Print input tensor shape before padding
+  printf("Input tensor shape before padding: [");
+  for (int i = 0; i < inputTensor.dim(); i++) {
+    printf("%ld", inputTensor.size(i));
+    if (i < inputTensor.dim() - 1) printf(", ");
+  }
+  printf("]\n");
+
+  int padding_h = ((inputHeight >> 3) << 3) + 4 - inputHeight;
+  int padding_w = ((inputWidth >> 3) << 3) + 4 - inputWidth;
+  printf("Padding values: padding_h=%d, padding_w=%d\n", padding_h, padding_w);
+
+  // Pad the input tensor to the nearest multiple of 8
+  if (padding_h > 0 || padding_w > 0) {
+    // Pad format: {left, right, top, bottom}
+    inputTensor = torch::reflection_pad2d(inputTensor, {padding_w, padding_w, padding_h, padding_h});
+    
+    // Print input tensor shape after padding
+    printf("Input tensor shape after padding: [");
+    for (int i = 0; i < inputTensor.dim(); i++) {
+      printf("%ld", inputTensor.size(i));
+      if (i < inputTensor.dim() - 1) printf(", ");
+    }
+    printf("]\n");
+  }
+
   // Print input tensor shape
   printf("Input tensor shape: [");
   for (int i = 0; i < inputTensor.dim(); i++) {
@@ -84,19 +109,16 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   }
   printf("]\n");
 
-  // Unpad the output to match target dimensions
-  // VTM typically adds 4 pixels on each side, so we need to remove them
-  int vtm_margin = 4;  // VTM typically adds 4 pixels on each side
-  int output_padding_h = vtm_margin * 2;  // 2x scaling, so 2x padding
-  int output_padding_w = vtm_margin * 2;
-  
-  printf("Removing VTM padding: h=%d, w=%d from output\n", output_padding_h, output_padding_w);
-  
-  if (output_padding_h > 0 || output_padding_w > 0) {
-    // Remove padding from output tensor
-    outputTensor = outputTensor.slice(2, output_padding_h, outputTensor.size(2) - output_padding_h)
-                                  .slice(3, output_padding_w, outputTensor.size(3) - output_padding_w);
+  // Remove padding from output tensor
+  // Calculate scaling factor dynamically
+  int scaling = outputWidth / inputWidth;  // or outputHeight / inputHeight
+  padding_h *= scaling;
+  padding_w *= scaling;
+  if (padding_h > 0 || padding_w > 0) {
+    outputTensor = outputTensor.slice(2, padding_h, outputTensor.size(2) - padding_h)
+                              .slice(3, padding_w, outputTensor.size(3) - padding_w);
     
+    // Print output tensor shape after unpadding
     printf("Output tensor shape after unpadding: [");
     for (int i = 0; i < outputTensor.dim(); i++) {
       printf("%ld", outputTensor.size(i));
@@ -105,8 +127,8 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
     printf("]\n");
   }
   
-  // Print final output tensor shape
-  printf("Final output tensor shape: [");
+  // Print output tensor shape
+  printf("Output tensor shape: [");
   for (int i = 0; i < outputTensor.dim(); i++) {
     printf("%ld", outputTensor.size(i));
     if (i < outputTensor.dim() - 1) printf(", ");
@@ -206,9 +228,6 @@ torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width
   printf("pelArrayToTensor: width=%d, height=%d, bitDepth=%d, stride=%d\n", width, height, bitDepth, stride);
   printf("pelArray pointer: %p\n", pelArray);
   
-  // Use the full padded input as-is (much simpler!)
-  printf("Using full padded input: %dx%d\n", width, height);
-  
   // Debug: Print first few pixel values (using stride)
   printf("First 10 pixels (stride-aware): ");
   for (int i = 0; i < std::min(10, width * height); i++) {
@@ -220,12 +239,11 @@ torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width
   
   float* floatData = new float[width * height];
   
-  // Process the full padded buffer
   for (int y = 0; y < height; y++)
   {
     for (int x = 0; x < width; x++)
     {
-      float value = static_cast<float>(pelArray[y * stride + x]);
+      float value = static_cast<float>(pelArray[y * stride + x]);  // Use stride!
       float normalizedValue = value / ((1 << bitDepth) - 1.0f);
       floatData[y * width + x] = normalizedValue;
     }
