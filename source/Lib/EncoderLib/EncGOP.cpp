@@ -4263,10 +4263,10 @@ void EncGOP::xCalculateAddPSNR(Picture* pcPic, PelUnitBuf cPicD, const AccessUni
       PelBuf        vtmUpscaledY = upscaledRec.get(COMPONENT_Y);
       const CPelBuf targetY = upscaledOrg; // target full-res original Y
 
-      if (vtmUpscaledY.width > 0 && vtmUpscaledY.height > 0 &&
-          refLowResY.width  > 0 && refLowResY.height  > 0 &&
-          targetY.width == vtmUpscaledY.width && targetY.height == vtmUpscaledY.height)
+      // Check if upsampling is needed (decoded frame is lower resolution than original)
+      if (refLowResY.width < targetY.width || refLowResY.height < targetY.height)
       {
+        printf("Perform out-loop up-scaling\n");
         SuperResolutionNN srNN;
         const std::string& srModelPath = m_pcEncLib->getSRModelPath();
         const char* srPathCStr = srModelPath.c_str();

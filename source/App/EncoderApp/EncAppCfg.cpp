@@ -697,7 +697,7 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   po::Options opts;
   opts.addOptions()
 #if VTM_NN_SR_ENABLE
-  ("srModelPath,srpath",                                  m_srModelPath,                                  string(""), "Path to NN SR TorchScript model (.pt)")
+  ("srModelPath,-srpath",                                  m_srModelPath,                                  string(""), "Path to NN SR TorchScript model (.pt)")
 #endif
   ("help",                                            do_help,                                          false, "this help text")
   ("c",    po::parseConfigFile, "configuration file name")
