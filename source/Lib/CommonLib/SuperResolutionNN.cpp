@@ -18,9 +18,9 @@ bool SuperResolutionNN::loadModel(const char* modelPath)
   return true;
 }
 
-bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, int inputHeight,
-                                       Pel* outputData, int outputWidth, int outputHeight,
-                                       int bitDepth)
+bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, int inputHeight, int inputStride,
+                                         Pel* outputData, int outputWidth, int outputHeight, 
+                                         int bitDepth)
 {
   if (!m_modelLoaded)
   {
@@ -42,8 +42,18 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
     return false;
   }
 
-  // Convert input to tensor
-  torch::Tensor inputTensor = pelArrayToTensor(inputData, inputWidth, inputHeight, bitDepth);
+  // Debug: Print input data info
+  printf("performInference input data:\n");
+  printf("  inputData pointer: %p\n", inputData);
+  printf("  inputWidth=%d, inputHeight=%d, bitDepth=%d\n", inputWidth, inputHeight, bitDepth);
+  printf("  First 10 input pixels: ");
+  for (int i = 0; i < std::min(10, inputWidth * inputHeight); i++) {
+    printf("%d ", inputData[i]);
+  }
+  printf("\n");
+
+  // Convert input to tensor using the provided stride
+  torch::Tensor inputTensor = pelArrayToTensor(inputData, inputWidth, inputHeight, bitDepth, inputStride);
   
   // Print input tensor shape before padding
   printf("Input tensor shape before padding: [");
@@ -215,23 +225,51 @@ bool SuperResolutionNN::exhaustiveSearch(const Pel* refBlock, int refWidth, int 
   return nnMSE < vtmMSE;
 }
 
-torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width, int height, int bitDepth)
+torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width, int height, int bitDepth, int stride)
 {
+  // Debug: Print input parameters
+  printf("pelArrayToTensor: width=%d, height=%d, bitDepth=%d, stride=%d\n", width, height, bitDepth, stride);
+  printf("pelArray pointer: %p\n", pelArray);
+  
+  // Debug: Print first few pixel values (using stride)
+  printf("First 10 pixels (stride-aware): ");
+  for (int i = 0; i < std::min(10, width * height); i++) {
+    int y = i / width;
+    int x = i % width;
+    printf("%d ", pelArray[y * stride + x]);
+  }
+  printf("\n");
+  
   float* floatData = new float[width * height];
   
   for (int y = 0; y < height; y++)
   {
     for (int x = 0; x < width; x++)
     {
-      float value = static_cast<float>(pelArray[y * width + x]);
+      float value = static_cast<float>(pelArray[y * stride + x]);  // Use stride!
       float normalizedValue = value / ((1 << bitDepth) - 1.0f);
       floatData[y * width + x] = normalizedValue;
     }
   }
   
+  // Debug: Print first few normalized values
+  printf("First 10 normalized values: ");
+  for (int i = 0; i < std::min(10, width * height); i++) {
+    printf("%.3f ", floatData[i]);
+  }
+  printf("\n");
+  
   auto tensor = torch::from_blob(floatData, {height, width, 1}, torch::kFloat).clone();
   tensor = tensor.permute({2, 0, 1}); // CHW format -> [1, H, W]
   tensor = tensor.unsqueeze(0); // Add batch dimension -> [1, 1, H, W]
+  
+  // Debug: Print tensor values
+  printf("Tensor first few values: ");
+  auto tensor_data = tensor.data_ptr<float>();
+  for (int i = 0; i < std::min(10, (int)tensor.numel()); i++) {
+    printf("%.3f ", tensor_data[i]);
+  }
+  printf("\n");
   
   // Safe to delete after clone() - tensor now owns its own data
   delete[] floatData;

@@ -4368,7 +4368,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 Pel* nnResult = new Pel[vtmLuma.width * vtmLuma.height];
                 
               // Perform NN inference on luma only
-              if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height,
+              if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height, refBuf.stride,
                                       nnResult, vtmLuma.width, vtmLuma.height,
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   

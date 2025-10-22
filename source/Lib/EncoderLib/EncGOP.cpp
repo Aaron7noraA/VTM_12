@@ -4273,7 +4273,7 @@ void EncGOP::xCalculateAddPSNR(Picture* pcPic, PelUnitBuf cPicD, const AccessUni
         if (srNN.loadModel(srPathCStr))
         {
           Pel* nnResult = new Pel[vtmUpscaledY.width * vtmUpscaledY.height];
-          if (srNN.performInference(refLowResY.buf, refLowResY.width, refLowResY.height,
+          if (srNN.performInference(refLowResY.buf, refLowResY.width, refLowResY.height, refLowResY.stride,
                                     nnResult, vtmUpscaledY.width, vtmUpscaledY.height,
                                     sps.getBitDepth(CHANNEL_TYPE_LUMA)))
           {
