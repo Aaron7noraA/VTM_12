@@ -60,8 +60,7 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   // Pad the input tensor to the nearest multiple of 8
   if (padding_h > 0 || padding_w > 0) {
     // Pad format: {left, right, top, bottom}
-    inputTensor = torch::nn::functional::pad(inputTensor, 
-      torch::nn::functional::PadFuncOptions({padding_w, padding_w, padding_h, padding_h}).mode(torch::kReflect));
+    inputTensor = torch::reflection_pad2d(inputTensor, {padding_w, padding_w, padding_h, padding_h});
     
     // Print input tensor shape after padding
     printf("Input tensor shape after padding: [");
@@ -101,6 +100,10 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   printf("]\n");
 
   // Remove padding from output tensor
+  // Calculate scaling factor dynamically
+  int scaling = outputWidth / inputWidth;  // or outputHeight / inputHeight
+  padding_h *= scaling;
+  padding_w *= scaling;
   if (padding_h > 0 || padding_w > 0) {
     // For same-resolution output, padding is the same as input padding
     // Slice to remove padding: slice(dim, start, end)
