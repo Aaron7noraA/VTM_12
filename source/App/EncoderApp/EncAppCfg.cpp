@@ -696,7 +696,9 @@ bool EncAppCfg::parseCfg( int argc, char* argv[] )
   // clang-format off
   po::Options opts;
   opts.addOptions()
-  ("NN_PATH",                                         m_srModelPath,                                  string(""),          string("Path to NN SR TorchScript model (.pt)"))
+#if VTM_NN_SR_ENABLE
+  ("srModelPath,srpath",                                  m_srModelPath,                                  string(""), "Path to NN SR TorchScript model (.pt)")
+#endif
   ("help",                                            do_help,                                          false, "this help text")
   ("c",    po::parseConfigFile, "configuration file name")
   ("WarnUnknowParameter,w",                           warnUnknowParameter,                                  0, "warn for unknown configuration parameters instead of failing")

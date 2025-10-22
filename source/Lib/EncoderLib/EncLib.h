@@ -86,6 +86,7 @@ private:
   InterSearch               m_cInterSearch;                       ///< encoder search class
   IntraSearch               m_cIntraSearch;                       ///< encoder search class
 #endif
+  
   // coding tool
 #if ENABLE_SPLIT_PARALLELISM
   TrQuant                  *m_cTrQuant;                           ///< transform & quantization class
@@ -295,6 +296,7 @@ public:
 
   int getLayerId() const { return m_layerId; }
   VPS* getVPS()          { return m_vps;     }
+  
 };
 
 //! \}

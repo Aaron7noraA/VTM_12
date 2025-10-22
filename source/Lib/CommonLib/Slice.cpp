@@ -4347,8 +4347,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
             
             SuperResolutionNN srNN;
             {
-              // Get model path from SPS (passed through encoder configuration)
-              const std::string& srModelPath = getSPS()->getSRModelPath();
+              // Get model path from EncLib (passed through encoder configuration)
+              const std::string& srModelPath = getPPS()->pcPic->cs->vps->getEncLib()->getSRModelPath();
               const char* srPathCStr = srModelPath.c_str();
               if (srNN.loadModel(srPathCStr)) {
               
@@ -4403,7 +4403,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 delete[] nnResult;
               } // End of else block for valid dimensions
             } // End of if (srNN.loadModel(srPathCStr))
-          }
+          } // End of anonymous block
+          } // End of if (!downsampling)
 #endif
           scaledRefPic[j]->unscaledPic = m_apcRefPicList[refList][rIdx];
           scaledRefPic[j]->extendPicBorder( getPPS() );

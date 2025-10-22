@@ -85,7 +85,9 @@ protected:
   std::string m_inputFileName;                                ///< source file name
   std::string m_bitstreamFileName;                            ///< output bitstream file
   std::string m_reconFileName;                                ///< output reconstruction file
+#if VTM_NN_SR_ENABLE
   std::string m_srModelPath;                                  ///< NN SR model path (TorchScript)
+#endif
 
   // Lambda modifiers
   double    m_adLambdaModifier[ MAX_TLAYER ];                 ///< Lambda modifier array for each temporal layer

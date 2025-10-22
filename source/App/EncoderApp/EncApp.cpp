@@ -542,7 +542,9 @@ void EncApp::xInitLibCfg()
   m_cEncLib.setIntraLambdaModifier                               ( m_adIntraLambdaModifier );
   m_cEncLib.setIntraQpFactor                                     ( m_dIntraQpFactor );
   // NN-SR model path (configurable via cfg/CLI)
+#if VTM_NN_SR_ENABLE
   m_cEncLib.setSRModelPath                                       ( m_srModelPath );
+#endif
 
   m_cEncLib.setBaseQP                                            ( m_iQP );
 
