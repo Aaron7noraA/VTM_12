@@ -87,6 +87,11 @@ private:
   IntraSearch               m_cIntraSearch;                       ///< encoder search class
 #endif
   
+#if VTM_NN_SR_ENABLE
+  // NN Super Resolution
+  std::string               m_srModelPath;                       ///< NN SR model path
+#endif
+  
   // coding tool
 #if ENABLE_SPLIT_PARALLELISM
   TrQuant                  *m_cTrQuant;                           ///< transform & quantization class
@@ -296,6 +301,12 @@ public:
 
   int getLayerId() const { return m_layerId; }
   VPS* getVPS()          { return m_vps;     }
+  
+#if VTM_NN_SR_ENABLE
+  // NN Super Resolution
+  void setSRModelPath(const std::string& path) { m_srModelPath = path; }
+  const std::string& getSRModelPath() const { return m_srModelPath; }
+#endif
   
 };
 
