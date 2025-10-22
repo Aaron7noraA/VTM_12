@@ -45,6 +45,33 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   // Convert input to tensor
   torch::Tensor inputTensor = pelArrayToTensor(inputData, inputWidth, inputHeight, bitDepth);
   
+  // Print input tensor shape before padding
+  printf("Input tensor shape before padding: [");
+  for (int i = 0; i < inputTensor.dim(); i++) {
+    printf("%ld", inputTensor.size(i));
+    if (i < inputTensor.dim() - 1) printf(", ");
+  }
+  printf("]\n");
+
+  int padding_h = ((inputHeight >> 3) << 3) + 4 - inputHeight;
+  int padding_w = ((inputWidth >> 3) << 3) + 4 - inputWidth;
+  printf("Padding values: padding_h=%d, padding_w=%d\n", padding_h, padding_w);
+
+  // Pad the input tensor to the nearest multiple of 8
+  if (padding_h > 0 || padding_w > 0) {
+    // Pad format: {left, right, top, bottom}
+    inputTensor = torch::nn::functional::pad(inputTensor, 
+      torch::nn::functional::PadFuncOptions({padding_w, padding_w, padding_h, padding_h}).mode(torch::kReflect));
+    
+    // Print input tensor shape after padding
+    printf("Input tensor shape after padding: [");
+    for (int i = 0; i < inputTensor.dim(); i++) {
+      printf("%ld", inputTensor.size(i));
+      if (i < inputTensor.dim() - 1) printf(", ");
+    }
+    printf("]\n");
+  }
+
   // Print input tensor shape
   printf("Input tensor shape: [");
   for (int i = 0; i < inputTensor.dim(); i++) {
@@ -63,6 +90,31 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   } catch (const std::exception& e) {
     printf("ERROR: Model forward pass failed: %s\n", e.what());
     return false;
+  }
+
+  // Print output tensor shape before unpadding
+  printf("Output tensor shape before unpadding: [");
+  for (int i = 0; i < outputTensor.dim(); i++) {
+    printf("%ld", outputTensor.size(i));
+    if (i < outputTensor.dim() - 1) printf(", ");
+  }
+  printf("]\n");
+
+  // Remove padding from output tensor
+  if (padding_h > 0 || padding_w > 0) {
+    // For same-resolution output, padding is the same as input padding
+    // Slice to remove padding: slice(dim, start, end)
+    // Dimension 2 = height, Dimension 3 = width
+    outputTensor = outputTensor.slice(2, padding_h, outputTensor.size(2) - padding_h)
+                              .slice(3, padding_w, outputTensor.size(3) - padding_w);
+    
+    // Print output tensor shape after unpadding
+    printf("Output tensor shape after unpadding: [");
+    for (int i = 0; i < outputTensor.dim(); i++) {
+      printf("%ld", outputTensor.size(i));
+      if (i < outputTensor.dim() - 1) printf(", ");
+    }
+    printf("]\n");
   }
   
   // Print output tensor shape
