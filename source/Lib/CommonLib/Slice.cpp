@@ -4384,6 +4384,21 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               printf("  refBuf.buf pointer: %p\n", refBuf.buf);
               printf("  refBuf.stride: %d\n", refBuf.stride);
               
+              // Debug: Check if refBuf is the same as VTM's upsampler input
+              printf("Slice.cpp DEBUG: VTM upsampler input analysis:\n");
+              printf("  VTM input buffer: %p\n", m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID).buf);
+              printf("  VTM input stride: %d\n", m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID).stride);
+              printf("  VTM input dimensions: [%d, %d]\n", 
+                     m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID).width,
+                     m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID).height);
+              
+              // Check if they're the same buffer
+              if (refBuf.buf == m_apcRefPicList[refList][rIdx]->getRecoBuf().get(compID).buf) {
+                printf("  refBuf and VTM input are the SAME buffer\n");
+              } else {
+                printf("  refBuf and VTM input are DIFFERENT buffers!\n");
+              }
+              
               // Check center region of refBuf (5x5 block)
               int centerY = refBuf.height / 2;
               int centerX = refBuf.width / 2;
@@ -4412,6 +4427,33 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                 }
               }
               printf("  refBuf min/max: [%d, %d]\n", minRef, maxRef);
+              
+              // Debug: Check bottom-right corner for padding
+              printf("  Bottom-right 5x5 block (checking for padding):\n");
+              int bottomY = refBuf.height - 3;
+              int rightX = refBuf.width - 3;
+              for (int dy = -2; dy <= 2; dy++) {
+                printf("    ");
+                for (int dx = -2; dx <= 2; dx++) {
+                  int y = bottomY + dy;
+                  int x = rightX + dx;
+                  if (y >= 0 && y < refBuf.height && x >= 0 && x < refBuf.width) {
+                    printf("%3d ", refBuf.buf[y * refBuf.stride + x]);
+                  } else {
+                    printf("--- ");
+                  }
+                }
+                printf("\n");
+              }
+              
+              // Debug: Check if stride indicates padding
+              if (refBuf.stride > refBuf.width) {
+                printf("   WARNING: stride (%d) > width (%d) - buffer has padding!\n", 
+                       refBuf.stride, refBuf.width);
+                printf("  Padding size: %d pixels per row\n", refBuf.stride - refBuf.width);
+              } else {
+                printf("  No padding detected (stride == width)\n");
+              }
               
               // Perform NN inference on luma only
               if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height, refBuf.stride,
