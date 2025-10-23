@@ -4379,6 +4379,40 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               printf("Slice.cpp DEBUG: VTM upsampled to %dx%d\n", 
                      vtmLuma.width, vtmLuma.height);
               
+              // Debug: Check refBuf content (input to NN)
+              printf("Slice.cpp DEBUG: refBuf content analysis:\n");
+              printf("  refBuf.buf pointer: %p\n", refBuf.buf);
+              printf("  refBuf.stride: %d\n", refBuf.stride);
+              
+              // Check center region of refBuf (5x5 block)
+              int centerY = refBuf.height / 2;
+              int centerX = refBuf.width / 2;
+              printf("  Center 5x5 block (y=%d, x=%d):\n", centerY, centerX);
+              for (int dy = -2; dy <= 2; dy++) {
+                printf("    ");
+                for (int dx = -2; dx <= 2; dx++) {
+                  int y = centerY + dy;
+                  int x = centerX + dx;
+                  if (y >= 0 && y < refBuf.height && x >= 0 && x < refBuf.width) {
+                    printf("%3d ", refBuf.buf[y * refBuf.stride + x]);
+                  } else {
+                    printf("--- ");
+                  }
+                }
+                printf("\n");
+              }
+              
+              // Find min/max of refBuf
+              Pel minRef = refBuf.buf[0], maxRef = refBuf.buf[0];
+              for (int y = 0; y < refBuf.height; y++) {
+                for (int x = 0; x < refBuf.width; x++) {
+                  Pel val = refBuf.buf[y * refBuf.stride + x];
+                  if (val < minRef) minRef = val;
+                  if (val > maxRef) maxRef = val;
+                }
+              }
+              printf("  refBuf min/max: [%d, %d]\n", minRef, maxRef);
+              
               // Perform NN inference on luma only
               if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height, refBuf.stride,
                                       nnResult, vtmLuma.width, vtmLuma.height,
@@ -4386,6 +4420,40 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   
                   const CPelBuf& targetLuma = m_apcRefPicList[refList][rIdx]->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
                   
+                  // Debug: Check targetLuma content
+                  printf("Slice.cpp DEBUG: targetLuma content analysis:\n");
+                  printf("  targetLuma.buf pointer: %p\n", targetLuma.buf);
+                  printf("  targetLuma dimensions: [%d, %d]\n", targetLuma.width, targetLuma.height);
+                  printf("  targetLuma.stride: %d\n", targetLuma.stride);
+                  
+                  // Check center region of targetLuma (5x5 block)
+                  int targetCenterY = targetLuma.height / 2;
+                  int targetCenterX = targetLuma.width / 2;
+                  printf("  Target center 5x5 block (y=%d, x=%d):\n", targetCenterY, targetCenterX);
+                  for (int dy = -2; dy <= 2; dy++) {
+                    printf("    ");
+                    for (int dx = -2; dx <= 2; dx++) {
+                      int y = targetCenterY + dy;
+                      int x = targetCenterX + dx;
+                      if (y >= 0 && y < targetLuma.height && x >= 0 && x < targetLuma.width) {
+                        printf("%3d ", targetLuma.buf[y * targetLuma.stride + x]);
+                      } else {
+                        printf("--- ");
+                      }
+                    }
+                    printf("\n");
+                  }
+                  
+                  // Find min/max of targetLuma
+                  Pel minTarget = targetLuma.buf[0], maxTarget = targetLuma.buf[0];
+                  for (int y = 0; y < targetLuma.height; y++) {
+                    for (int x = 0; x < targetLuma.width; x++) {
+                      Pel val = targetLuma.buf[y * targetLuma.stride + x];
+                      if (val < minTarget) minTarget = val;
+                      if (val > maxTarget) maxTarget = val;
+                    }
+                  }
+                  printf("  targetLuma min/max: [%d, %d]\n", minTarget, maxTarget);
                   
                   // Now we can compare at the same resolution!
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
