@@ -27,7 +27,7 @@ public:
   
   // Neural network inference
   bool performInference(const Pel* inputData, int inputWidth, int inputHeight, int inputStride,
-                       Pel* outputData, int outputWidth, int outputHeight, 
+                       Pel* outputData, int outputWidth, int outputHeight, int outputStride,
                        int bitDepth);
   
   // Utility functions
@@ -42,7 +42,7 @@ public:
 private:
   // LibTorch-specific helper functions
   torch::Tensor pelArrayToTensor(const Pel* pelArray, int width, int height, int bitDepth, int stride);
-  void tensorToPelArray(const torch::Tensor& tensor, Pel* pelArray, int width, int height, int bitDepth);
+  void tensorToPelArray(const torch::Tensor& tensor, Pel* pelArray, int width, int height, int bitDepth, int stride);
 };
 
 #endif

@@ -4355,6 +4355,8 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               // Process only luma component (Y)
               ComponentID compID = ComponentID( 0 );
 
+              // Use the same buffer that VTM uses for upsampling (the downsampled reference)
+              // This should be the buffer that VTM's rescalePicture function uses as input
               const CPelBuf& refBuf = m_apcRefPicList[refList][rIdx]->getRecoBuf().get( compID );
 
               const PelUnitBuf& vtmResult = scaledRefPic[j]->getRecoBuf();
@@ -4379,7 +4381,7 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
               
               // Perform NN inference on luma only
               if (srNN.performInference(refBuf.buf, refBuf.width, refBuf.height, refBuf.stride,
-                                      nnResult, vtmLuma.width, vtmLuma.height,
+                                      nnResult, vtmLuma.width, vtmLuma.height, vtmLuma.stride,
                                       sps->getBitDepths().recon[CHANNEL_TYPE_LUMA])) {
                   
                   const CPelBuf& targetLuma = m_apcRefPicList[refList][rIdx]->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);

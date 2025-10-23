@@ -19,7 +19,7 @@ bool SuperResolutionNN::loadModel(const char* modelPath)
 }
 
 bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, int inputHeight, int inputStride,
-                                         Pel* outputData, int outputWidth, int outputHeight, 
+                                         Pel* outputData, int outputWidth, int outputHeight, int outputStride,
                                          int bitDepth)
 {
   if (!m_modelLoaded)
@@ -136,7 +136,8 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   printf("]\n");
   
   // Convert output back to Pel array
-  tensorToPelArray(outputTensor, outputData, outputWidth, outputHeight, bitDepth);
+  // Use the actual output stride from VTM buffer
+  tensorToPelArray(outputTensor, outputData, outputWidth, outputHeight, bitDepth, outputStride);
   
   return true;
 }
@@ -243,9 +244,9 @@ torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width
   {
     for (int x = 0; x < width; x++)
     {
-      float value = static_cast<float>(pelArray[y * stride + x]);  // Use stride!
+      float value = static_cast<float>(pelArray[y * stride + x]);  // Use stride for input!
       float normalizedValue = value / ((1 << bitDepth) - 1.0f);
-      floatData[y * width + x] = normalizedValue;
+      floatData[y * width + x] = normalizedValue;  // Output buffer is contiguous, so use width
     }
   }
   
@@ -273,7 +274,7 @@ torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width
   return tensor;
 }
 
-void SuperResolutionNN::tensorToPelArray(const torch::Tensor& tensor, Pel* pelArray, int width, int height, int bitDepth)
+void SuperResolutionNN::tensorToPelArray(const torch::Tensor& tensor, Pel* pelArray, int width, int height, int bitDepth, int stride)
 {
   torch::Tensor cpuTensor = tensor.cpu();
   
@@ -312,10 +313,12 @@ void SuperResolutionNN::tensorToPelArray(const torch::Tensor& tensor, Pel* pelAr
   {
     for (int x = 0; x < width; x++)
     {
+      // Read from tensor data (contiguous): data[y * width + x]
       float normalizedValue = data[y * width + x];
       float denormalizedValue = normalizedValue * ((1 << bitDepth) - 1.0f);
       denormalizedValue = std::max(0.0f, std::min(denormalizedValue, (1 << bitDepth) - 1.0f));
-      pelArray[y * width + x] = static_cast<Pel>(std::round(denormalizedValue));
+      // Write to output buffer (might have stride): pelArray[y * stride + x]
+      pelArray[y * stride + x] = static_cast<Pel>(std::round(denormalizedValue));
     }
   }
 }
