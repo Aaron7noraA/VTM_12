@@ -27,7 +27,7 @@ public:
   
   // Neural network inference
   bool performInference(const Pel* inputData, int inputWidth, int inputHeight, int inputStride,
-                       Pel* outputData, int outputWidth, int outputHeight, int outputStride,
+                       Pel* outputData, int outputWidth, int outputHeight, 
                        int bitDepth);
   
   // Utility functions

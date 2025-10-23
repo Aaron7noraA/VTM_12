@@ -19,7 +19,7 @@ bool SuperResolutionNN::loadModel(const char* modelPath)
 }
 
 bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, int inputHeight, int inputStride,
-                                         Pel* outputData, int outputWidth, int outputHeight, int outputStride,
+                                         Pel* outputData, int outputWidth, int outputHeight, 
                                          int bitDepth)
 {
   if (!m_modelLoaded)
@@ -136,8 +136,9 @@ bool SuperResolutionNN::performInference(const Pel* inputData, int inputWidth, i
   printf("]\n");
   
   // Convert output back to Pel array
-  // Use the actual output stride from VTM buffer
-  tensorToPelArray(outputTensor, outputData, outputWidth, outputHeight, bitDepth, outputStride);
+  // Note: outputData (nnResult) is a contiguous buffer allocated as new Pel[width*height]
+  // So stride equals width for this buffer, not the VTM buffer stride
+  tensorToPelArray(outputTensor, outputData, outputWidth, outputHeight, bitDepth, outputWidth);
   
   return true;
 }
