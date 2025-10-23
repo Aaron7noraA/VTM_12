@@ -230,6 +230,12 @@ torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width
   printf("pelArrayToTensor: width=%d, height=%d, bitDepth=%d, stride=%d\n", width, height, bitDepth, stride);
   printf("pelArray pointer: %p\n", pelArray);
   
+  // Debug: Check for stride issues
+  if (stride != width) {
+    printf("WARNING: stride (%d) != width (%d) - buffer has padding!\n", stride, width);
+    printf("This means we're reading from a padded buffer.\n");
+  }
+  
   // Debug: Print first few pixel values (using stride)
   printf("First 10 pixels (stride-aware): ");
   for (int i = 0; i < std::min(10, width * height); i++) {
@@ -238,6 +244,15 @@ torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width
     printf("%d ", pelArray[y * stride + x]);
   }
   printf("\n");
+  
+  // Debug: Check if we're reading the same data with different access patterns
+  printf("Debug: Compare stride vs non-stride access:\n");
+  printf("  stride access [0,0]: %d\n", pelArray[0 * stride + 0]);
+  printf("  stride access [0,1]: %d\n", pelArray[0 * stride + 1]);
+  printf("  stride access [1,0]: %d\n", pelArray[1 * stride + 0]);
+  if (stride != width) {
+    printf("  non-stride access [1,0]: %d (WRONG!)\n", pelArray[1 * width + 0]);
+  }
   
   float* floatData = new float[width * height];
   
@@ -258,9 +273,22 @@ torch::Tensor SuperResolutionNN::pelArrayToTensor(const Pel* pelArray, int width
   }
   printf("\n");
   
+  // Debug: Check normalization range
+  float minNorm = floatData[0], maxNorm = floatData[0];
+  for (int i = 0; i < width * height; i++) {
+    if (floatData[i] < minNorm) minNorm = floatData[i];
+    if (floatData[i] > maxNorm) maxNorm = floatData[i];
+  }
+  printf("Normalized range: [%.3f, %.3f] (should be [0.0, 1.0])\n", minNorm, maxNorm);
+  
   auto tensor = torch::from_blob(floatData, {height, width, 1}, torch::kFloat).clone();
+  printf("Initial tensor shape: [%ld, %ld, %ld]\n", tensor.size(0), tensor.size(1), tensor.size(2));
+  
   tensor = tensor.permute({2, 0, 1}); // CHW format -> [1, H, W]
+  printf("After permute: [%ld, %ld, %ld]\n", tensor.size(0), tensor.size(1), tensor.size(2));
+  
   tensor = tensor.unsqueeze(0); // Add batch dimension -> [1, 1, H, W]
+  printf("Final tensor shape: [%ld, %ld, %ld, %ld]\n", tensor.size(0), tensor.size(1), tensor.size(2), tensor.size(3));
   
   // Debug: Print tensor values
   printf("Tensor first few values: ");
@@ -310,12 +338,22 @@ void SuperResolutionNN::tensorToPelArray(const torch::Tensor& tensor, Pel* pelAr
   
   float* data = cpuTensor.data_ptr<float>();
   
+  // Debug: Check tensor data layout
+  printf("tensorToPelArray debug:\n");
+  printf("  Tensor shape: [%ld, %ld, %ld]\n", cpuTensor.size(0), cpuTensor.size(1), cpuTensor.size(2));
+  printf("  Expected access pattern: data[y * width + x]\n");
+  printf("  First few tensor values: ");
+  for (int i = 0; i < std::min(10, width * height); i++) {
+    printf("%.3f ", data[i]);
+  }
+  printf("\n");
+  
   for (int y = 0; y < height; y++)
   {
     for (int x = 0; x < width; x++)
     {
-      // Read from tensor data (contiguous): data[y * width + x]
-      float normalizedValue = data[y * width + x];
+      // Read from tensor data using proper tensor indexing
+      float normalizedValue = cpuTensor[y][x].item<float>();
       float denormalizedValue = normalizedValue * ((1 << bitDepth) - 1.0f);
       denormalizedValue = std::max(0.0f, std::min(denormalizedValue, (1 << bitDepth) - 1.0f));
       // Write to output buffer (might have stride): pelArray[y * stride + x]
