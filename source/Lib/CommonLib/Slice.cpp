@@ -4455,6 +4455,34 @@ void Slice::scaleRefPicList( Picture *scaledRefPic[ ], PicHeader *picHeader, APS
                   }
                   printf("  targetLuma min/max: [%d, %d]\n", minTarget, maxTarget);
                   
+                  // Debug: Compare NN output with target (center 5x5 block)
+                  printf("Slice.cpp DEBUG: NN output vs Target comparison (center 5x5):\n");
+                  printf("  NN output center 5x5 block:\n");
+                  for (int dy = -2; dy <= 2; dy++) {
+                    printf("    ");
+                    for (int dx = -2; dx <= 2; dx++) {
+                      int y = targetCenterY + dy;
+                      int x = targetCenterX + dx;
+                      if (y >= 0 && y < vtmLuma.height && x >= 0 && x < vtmLuma.width) {
+                        printf("%3d ", nnResult[y * vtmLuma.width + x]);
+                      } else {
+                        printf("--- ");
+                      }
+                    }
+                    printf("\n");
+                  }
+                  
+                  // Find min/max of NN output
+                  Pel minNN = nnResult[0], maxNN = nnResult[0];
+                  for (int y = 0; y < vtmLuma.height; y++) {
+                    for (int x = 0; x < vtmLuma.width; x++) {
+                      Pel val = nnResult[y * vtmLuma.width + x];
+                      if (val < minNN) minNN = val;
+                      if (val > maxNN) maxNN = val;
+                    }
+                  }
+                  printf("  NN output min/max: [%d, %d]\n", minNN, maxNN);
+                  
                   // Now we can compare at the same resolution!
                   bool useNN = srNN.exhaustiveSearch(refBuf.buf, refBuf.width, refBuf.height,
                                                    targetLuma.buf, targetLuma.width, targetLuma.height, targetLuma.stride,
