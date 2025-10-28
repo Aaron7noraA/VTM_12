@@ -501,7 +501,15 @@ void InterPrediction::xPredInterUni(const PredictionUnit &pu, const RefPicList &
       CHECK( bioApplied, "BIO is not allowed with affine" );
       m_iRefListIdx = eRefPicList;
       bool genChromaMv = (!luma && chroma && compID == COMPONENT_Cb);
-      xPredAffineBlk( compID, pu, pu.cu->slice->getRefPic( eRefPicList, iRefIdx )->unscaledPic, mv, pcYuvPred, bi, pu.cu->slice->clpRng( compID ), genChromaMv, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ));
+      const Picture* refPicObj = pu.cu->slice->getRefPic( eRefPicList, iRefIdx );
+#ifdef VTM_NN_ENABLE
+      const bool refIsScaled = refPicObj->isRefScaled( pu.cs->pps );
+      const Picture* srcPicForMC = refIsScaled ? refPicObj : refPicObj->unscaledPic;
+      const std::pair<int,int> ratioForMC = refIsScaled ? SCALE_1X : pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx );
+      xPredAffineBlk( compID, pu, srcPicForMC, mv, pcYuvPred, bi, pu.cu->slice->clpRng( compID ), genChromaMv, ratioForMC );
+#else
+      xPredAffineBlk( compID, pu, refPicObj->unscaledPic, mv, pcYuvPred, bi, pu.cu->slice->clpRng( compID ), genChromaMv, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ) );
+#endif
     }
     else
     {
@@ -512,7 +520,15 @@ void InterPrediction::xPredInterUni(const PredictionUnit &pu, const RefPicList &
       }
       else
       {
-        xPredInterBlk( compID, pu, pu.cu->slice->getRefPic( eRefPicList, iRefIdx )->unscaledPic, mv[0], pcYuvPred, bi, pu.cu->slice->clpRng( compID ), bioApplied, isIBC, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ) );
+        const Picture* refPicObj = pu.cu->slice->getRefPic( eRefPicList, iRefIdx );
+#ifdef VTM_NN_ENABLE
+        const bool refIsScaled = refPicObj->isRefScaled( pu.cs->pps );
+        const Picture* srcPicForMC = refIsScaled ? refPicObj : refPicObj->unscaledPic;
+        const std::pair<int,int> ratioForMC = refIsScaled ? SCALE_1X : pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx );
+        xPredInterBlk( compID, pu, srcPicForMC, mv[0], pcYuvPred, bi, pu.cu->slice->clpRng( compID ), bioApplied, isIBC, ratioForMC );
+#else
+        xPredInterBlk( compID, pu, refPicObj->unscaledPic, mv[0], pcYuvPred, bi, pu.cu->slice->clpRng( compID ), bioApplied, isIBC, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ) );
+#endif
       }
     }
   }
