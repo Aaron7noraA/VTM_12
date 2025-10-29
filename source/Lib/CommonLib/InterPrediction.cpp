@@ -694,11 +694,7 @@ void InterPrediction::xPredInterBlk ( const ComponentID& compID, const Predictio
 
   bool useAltHpelIf = pu.cu->imv == IMV_HPEL;
 
-  if( !isIBC && xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID], Size( dstPic.bufs[compID].width, dstPic.bufs[compID].height ) ), refPic, mv, dstPic.bufs[compID].buf, dstPic.bufs[compID].stride, bi, wrapRef, clpRng, 0, useAltHpelIf
-#ifdef VTM_NN_SR_ENABLE
-    , pu.cs->slice->getPic()
-#endif
-  ) )
+  if( !isIBC && xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID], Size( dstPic.bufs[compID].width, dstPic.bufs[compID].height ) ), refPic, mv, dstPic.bufs[compID].buf, dstPic.bufs[compID].stride, bi, wrapRef, clpRng, 0, useAltHpelIf ) )
   {
     CHECK( bilinearMC, "DMVR should be disabled with RPR" );
     CHECK( bioApplied, "BDOF should be disabled with RPR" );
@@ -1142,11 +1138,7 @@ void InterPrediction::xPredAffineBlk(const ComponentID &compID, const Prediction
         iMvScaleTmpVer = curMv.ver;
       }
 
-      if( xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID].offset( w, h ), Size( blockWidth, blockHeight ) ), refPic, Mv( iMvScaleTmpHor, iMvScaleTmpVer ), dstBuf.buf + w + h * dstBuf.stride, dstBuf.stride, bi, wrapRef, clpRng, 2, false
-#ifdef VTM_NN_SR_ENABLE
-        , pu.cs->slice->getPic()
-#endif
-      ) )
+      if( xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID].offset( w, h ), Size( blockWidth, blockHeight ) ), refPic, Mv( iMvScaleTmpHor, iMvScaleTmpVer ), dstBuf.buf + w + h * dstBuf.stride, dstBuf.stride, bi, wrapRef, clpRng, 2 ) )
       {
         CHECK( enablePROF, "PROF should be disabled with RPR" );
       }
@@ -2322,11 +2314,7 @@ bool InterPrediction::isLumaBvValid(const int ctuSize, const int xCb, const int 
   return true;
 }
 
-bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio, const PPS& pps, const CompArea &blk, const Picture* refPic, const Mv& mv, Pel* dst, const int dstStride, const bool bi, const bool wrapRef, const ClpRng& clpRng, const int filterIndex, const bool useAltHpelIf
-#ifdef VTM_NN_SR_ENABLE
-  , const Picture* curPic
-#endif
-)
+bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio, const PPS& pps, const CompArea &blk, const Picture* refPic, const Mv& mv, Pel* dst, const int dstStride, const bool bi, const bool wrapRef, const ClpRng& clpRng, const int filterIndex, const bool useAltHpelIf )
 {
   const ChromaFormat  chFmt = blk.chromaFormat;
   const ComponentID compID = blk.compID;
@@ -2509,7 +2497,8 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
 
 #ifdef VTM_NN_SR_ENABLE
   // VTM-first, NN-override: dst currently holds VTM RPR result when scaled==true
-  if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16)
+  if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16 &&
+    (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second))
   {
     const Slice* slice = refPic->slices[0];
     if (slice)
@@ -2518,54 +2507,37 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
       const std::string& srModelPath = refPic->cs->sps->getSRModelPath();
       if (!srModelPath.empty() && srNN.loadModel(srModelPath.c_str()))
       {
-          // Copy VTM result from dst into contiguous buffer
-          Pel* vtmResult = new Pel[blk.width * blk.height];
-          for (int y = 0; y < blk.height; ++y)
-          {
-            memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
-          }
-        // Only process upsampling (scaling > 1) - use OR for 1D upscales
-        if (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second)
+        // Copy VTM result from dst into contiguous buffer
+        Pel* vtmResult = new Pel[blk.width * blk.height];
+        for (int y = 0; y < blk.height; ++y)
         {
+          memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
+        }
 
-
-          // Prepare NN input block from refPic (unscaled) using proper fixed-point arithmetic
-          int refWidth  = refPic->getPicWidthInLumaSamples();
-          int refHeight = refPic->getPicHeightInLumaSamples();
-          
-          // Use MV-aware, fixed-point scaling consistent with VTM RPR
-          const int posShiftLoc = SCALE_RATIO_BITS - 4;
-          const int shiftHorLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
-          const int shiftVerLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
-          const int offXLoc = 1 << ( posShiftLoc - shiftHorLoc - 1 );
-          const int offYLoc = 1 << ( posShiftLoc - shiftVerLoc - 1 );
-
-          // For upsampling: reference block should be smaller than target block
-          // Calculate the downscaled reference block dimensions
-          int refW = (blk.width * SCALE_1X.first) / scalingRatio.first;
-          int refH = (blk.height * SCALE_1X.second) / scalingRatio.second;
+        // Prepare NN input block from refPic (unscaled)
+        int refWidth  = refPic->getPicWidthInLumaSamples();
+        int refHeight = refPic->getPicHeightInLumaSamples();
+        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
+        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
+        
+        // Only process upsampling (scaling > 1)
+        if (scaleX > 1 && scaleY > 1)
+        {
+          // For upsampling: reference block is smaller than output block
+          int refX = blk.x / scaleX;
+          int refY = blk.y / scaleY;
+          int refW = blk.width / scaleX;
+          int refH = blk.height / scaleY;
           
           // Ensure minimum size of 1x1
           refW = std::max(1, refW);
           refH = std::max(1, refH);
           
-          // Calculate reference position (center the reference block)
-          int refX = (blk.x * SCALE_1X.first) / scalingRatio.first;
-          int refY = (blk.y * SCALE_1X.second) / scalingRatio.second;
-          
-          // Clamp to reference picture bounds
           refX = std::max(0, std::min(refX, refWidth - refW));
           refY = std::max(0, std::min(refY, refHeight - refH));
-          refW = std::min(refW, refWidth - refX);
-          refH = std::min(refH, refHeight - refY);
 
           if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
           {
-            // Debug: Print dimensions
-            printf("[NN-SR] Scaling: %.2fx%.2f, Ref block: (%d,%d) %dx%d, Target: %dx%d\n", 
-                   (double)scalingRatio.first / SCALE_1X.first, (double)scalingRatio.second / SCALE_1X.second,
-                   refX, refY, refW, refH, blk.width, blk.height);
-            
             const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
             Pel* nnResult = new Pel[blk.width * blk.height];
             if (srNN.performInference(refBlock.buf, refW, refH, refBlock.stride,
@@ -2573,6 +2545,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
                                       slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
             {
               bool useNN = false;
+              const Picture* curPic = refPic->cs->slice->getPic();
               if (curPic)
               {
                 const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
