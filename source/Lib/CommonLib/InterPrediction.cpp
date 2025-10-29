@@ -2497,7 +2497,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
 
 #ifdef VTM_NN_SR_ENABLE
   // VTM-first, NN-override: dst currently holds VTM RPR result when scaled==true
-  if (isLuma(compID) && scaled)
+  if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16)
   {
     const Slice* slice = refPic->slices[0];
     if (slice)
@@ -2519,19 +2519,30 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
         int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
         int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
         
-        // Only process upsampling (scaling > 1)
-        if (scaleX > 1 && scaleY > 1)
+        // Only process upsampling (scaling > 1) using fixed-point ratios
+        if (scalingRatio.first > SCALE_1X.first && scalingRatio.second > SCALE_1X.second)
         {
-          // For upsampling: reference block is smaller than output block
-          int refX = blk.x / scaleX;
-          int refY = blk.y / scaleY;
-          int refW = blk.width / scaleX;
-          int refH = blk.height / scaleY;
-          
-          // Ensure minimum size of 1x1
-          refW = std::max(1, refW);
-          refH = std::max(1, refH);
-          
+          // Derive NN reference block using fixed-point scaling and MV (luma path)
+          const int posShiftLoc = SCALE_RATIO_BITS - 4;
+          const int shiftHorLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
+          const int shiftVerLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
+          const int offXLoc = 1 << ( posShiftLoc - shiftHorLoc - 1 );
+          const int offYLoc = 1 << ( posShiftLoc - shiftVerLoc - 1 );
+
+          const int64_t x0Int = ((int64_t)((blk.x << 4) + mv.hor) * (int64_t)scalingRatio.first);
+          const int64_t y0Int = ((int64_t)((blk.y << 4) + mv.ver) * (int64_t)scalingRatio.second);
+          const int64_t x1Int = ((int64_t)(((blk.x + blk.width  - 1) << 4) + mv.hor) * (int64_t)scalingRatio.first);
+          const int64_t y1Int = ((int64_t)(((blk.y + blk.height - 1) << 4) + mv.ver) * (int64_t)scalingRatio.second);
+
+          int refX = (int)((x0Int + offXLoc) >> posShiftLoc);
+          int refY = (int)((y0Int + offYLoc) >> posShiftLoc);
+          const int refX1 = (int)((x1Int + offXLoc) >> posShiftLoc);
+          const int refY1 = (int)((y1Int + offYLoc) >> posShiftLoc);
+
+          int refW = std::max(1, refX1 - refX + 1);
+          int refH = std::max(1, refY1 - refY + 1);
+
+          // Clamp to reference bounds
           refX = std::max(0, std::min(refX, refWidth - refW));
           refY = std::max(0, std::min(refY, refHeight - refH));
 
