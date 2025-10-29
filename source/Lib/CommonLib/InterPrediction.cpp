@@ -2506,15 +2506,16 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
       const std::string& srModelPath = refPic->cs->sps->getSRModelPath();
       if (!srModelPath.empty() && srNN.loadModel(srModelPath.c_str()))
       {
-        // Only process upsampling (scaling > 1) - use OR for 1D upscales
-        if (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second)
-        {
           // Copy VTM result from dst into contiguous buffer
           Pel* vtmResult = new Pel[blk.width * blk.height];
           for (int y = 0; y < blk.height; ++y)
           {
             memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
           }
+        // Only process upsampling (scaling > 1) - use OR for 1D upscales
+        if (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second)
+        {
+
 
           // Prepare NN input block from refPic (unscaled) using proper fixed-point arithmetic
           int refWidth  = refPic->getPicWidthInLumaSamples();
@@ -2527,18 +2528,18 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           const int offXLoc = 1 << ( posShiftLoc - shiftHorLoc - 1 );
           const int offYLoc = 1 << ( posShiftLoc - shiftVerLoc - 1 );
 
-          const int64_t x0Int = ((int64_t)((blk.x << 4) + mv.hor) * (int64_t)scalingRatio.first);
-          const int64_t y0Int = ((int64_t)((blk.y << 4) + mv.ver) * (int64_t)scalingRatio.second);
-          const int64_t x1Int = ((int64_t)(((blk.x + blk.width  - 1) << 4) + mv.hor) * (int64_t)scalingRatio.first);
-          const int64_t y1Int = ((int64_t)(((blk.y + blk.height - 1) << 4) + mv.ver) * (int64_t)scalingRatio.second);
-
-          int refX = (int)((x0Int + offXLoc) >> posShiftLoc);
-          int refY = (int)((y0Int + offYLoc) >> posShiftLoc);
-          const int refX1 = (int)((x1Int + offXLoc) >> posShiftLoc);
-          const int refY1 = (int)((y1Int + offYLoc) >> posShiftLoc);
-
-          int refW = refX1 - refX + 1;
-          int refH = refY1 - refY + 1;
+          // For upsampling: reference block should be smaller than target block
+          // Calculate the downscaled reference block dimensions
+          int refW = (blk.width * SCALE_1X.first) / scalingRatio.first;
+          int refH = (blk.height * SCALE_1X.second) / scalingRatio.second;
+          
+          // Ensure minimum size of 1x1
+          refW = std::max(1, refW);
+          refH = std::max(1, refH);
+          
+          // Calculate reference position (center the reference block)
+          int refX = (blk.x * SCALE_1X.first) / scalingRatio.first;
+          int refY = (blk.y * SCALE_1X.second) / scalingRatio.second;
           
           // Clamp to reference picture bounds
           refX = std::max(0, std::min(refX, refWidth - refW));
@@ -2548,6 +2549,11 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
 
           if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
           {
+            // Debug: Print dimensions
+            printf("[NN-SR] Scaling: %.2fx%.2f, Ref block: (%d,%d) %dx%d, Target: %dx%d\n", 
+                   (double)scalingRatio.first / SCALE_1X.first, (double)scalingRatio.second / SCALE_1X.second,
+                   refX, refY, refW, refH, blk.width, blk.height);
+            
             const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
             Pel* nnResult = new Pel[blk.width * blk.height];
             if (srNN.performInference(refBlock.buf, refW, refH, refBlock.stride,
