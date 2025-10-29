@@ -2546,6 +2546,11 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
                                                   vtmResult, blk.width, blk.width, blk.height);
                 double mseNN  = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
                                                   nnResult, blk.width, blk.width, blk.height);
+                
+                // Print MSE comparison
+                printf("[NN-SR] Block (%d,%d) size %dx%d: MSE_VTM=%.6f, MSE_NN=%.6f, UseNN=%s\n", 
+                       blk.x, blk.y, blk.width, blk.height, mseVTM, mseNN, (mseNN < mseVTM) ? "YES" : "NO");
+                
                 useNN = (mseNN < mseVTM);
               }
             }
