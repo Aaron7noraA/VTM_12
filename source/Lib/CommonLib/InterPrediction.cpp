@@ -2514,46 +2514,23 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
         }
 
-        // Prepare NN input block from refPic (unscaled) using fixed-point, MV-aware mapping
+        // Prepare NN input block from refPic (unscaled)
         int refWidth  = refPic->getPicWidthInLumaSamples();
         int refHeight = refPic->getPicHeightInLumaSamples();
-
-        // Debug: Print scaling ratios
-        printf("[NN-SR] Processing block (%d,%d) size %dx%d, scaling: %.2fx%.2f (1.0x = %d)\n", 
-               blk.x, blk.y, blk.width, blk.height, 
-               (double)scalingRatio.first / SCALE_1X.first, 
-               (double)scalingRatio.second / SCALE_1X.second,
-               SCALE_1X.first);
+        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
+        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
         
-        // Safety check: avoid division by zero
-        if (scalingRatio.first <= 0 || scalingRatio.second <= 0) {
-          printf("[NN-SR] ERROR: Invalid scaling ratio (%d, %d)\n", scalingRatio.first, scalingRatio.second);
-          delete [] vtmResult;
-          return scaled;
-        }
+        // For upsampling: reference block is smaller than output block
+        int refX = blk.x / scaleX;
+        int refY = blk.y / scaleY;
+        int refW = blk.width / scaleX;
+        int refH = blk.height / scaleY;
         
-        // For upsampling: reference block should be smaller than target block
-        // refW = blk.width * scalingRatio / SCALE_1X (since scalingRatio < SCALE_1X for upsampling)
-        const int64_t refW_num = (int64_t) blk.width  * (int64_t) scalingRatio.first;
-        const int64_t refH_num = (int64_t) blk.height * (int64_t) scalingRatio.second;
-        int refW = (int) ((refW_num + (SCALE_1X.first  >> 1))  / (int64_t) SCALE_1X.first);
-        int refH = (int) ((refH_num + (SCALE_1X.second >> 1)) / (int64_t) SCALE_1X.second);
+        // Ensure minimum size of 1x1
         refW = std::max(1, refW);
         refH = std::max(1, refH);
-
-        // Map top-left with MV in fixed-point consistent with RPR
-        const int posShiftLoc = SCALE_RATIO_BITS - 4;
-        const int shiftHorLoc = MV_FRACTIONAL_BITS_INTERNAL;
-        const int shiftVerLoc = MV_FRACTIONAL_BITS_INTERNAL;
-        const int offXLoc = 1 << ( posShiftLoc - shiftHorLoc - 1 );
-        const int offYLoc = 1 << ( posShiftLoc - shiftVerLoc - 1 );
-        const int64_t x0Int = ((int64_t)((blk.x << 4) + mv.hor) * (int64_t)scalingRatio.first);
-        const int64_t y0Int = ((int64_t)((blk.y << 4) + mv.ver) * (int64_t)scalingRatio.second);
-        int refX = (int)((x0Int + offXLoc) >> posShiftLoc);
-        int refY = (int)((y0Int + offYLoc) >> posShiftLoc);
-
-        // Clamp to bounds
-        refX = std::max(0, std::min(refX, refWidth  - refW));
+        
+        refX = std::max(0, std::min(refX, refWidth - refW));
         refY = std::max(0, std::min(refY, refHeight - refH));
 
         if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
@@ -2594,6 +2571,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
             }
           }
           delete [] nnResult;
+          
         }
         delete [] vtmResult;
       }
