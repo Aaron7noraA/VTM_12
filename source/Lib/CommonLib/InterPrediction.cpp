@@ -2498,14 +2498,8 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
 #ifdef VTM_NN_SR_ENABLE
   // VTM-first, NN-override: dst currently holds VTM RPR result when scaled==true
   if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16 &&
-    (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second))
+    (scalingRatio.first < SCALE_1X.first || scalingRatio.second < SCALE_1X.second))
   {
-    // Debug: Print scaling ratios
-    printf("[NN-SR] Processing block (%d,%d) size %dx%d, scaling: %.2fx%.2f (1.0x = %d)\n", 
-           blk.x, blk.y, blk.width, blk.height, 
-           (double)scalingRatio.first / SCALE_1X.first, 
-           (double)scalingRatio.second / SCALE_1X.second,
-           SCALE_1X.first);
     const Slice* slice = refPic->slices[0];
     if (slice)
     {
@@ -2520,67 +2514,78 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
         }
 
-        // Prepare NN input block from refPic (unscaled)
+        // Prepare NN input block from refPic (unscaled) using proper fixed-point arithmetic
         int refWidth  = refPic->getPicWidthInLumaSamples();
         int refHeight = refPic->getPicHeightInLumaSamples();
-        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
-        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
         
-        // Only process upsampling (scaling > 1)
-        if (scaleX > 1 && scaleY > 1)
-        {
-          // For upsampling: reference block is smaller than output block
-          int refX = blk.x / scaleX;
-          int refY = blk.y / scaleY;
-          int refW = blk.width / scaleX;
-          int refH = blk.height / scaleY;
-          
-          // Ensure minimum size of 1x1
-          refW = std::max(1, refW);
-          refH = std::max(1, refH);
-          
-          refX = std::max(0, std::min(refX, refWidth - refW));
-          refY = std::max(0, std::min(refY, refHeight - refH));
+        // Use MV-aware, fixed-point scaling consistent with VTM RPR
+        const int posShiftLoc = SCALE_RATIO_BITS - 4;
+        const int shiftHorLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
+        const int shiftVerLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
+        const int offXLoc = 1 << ( posShiftLoc - shiftHorLoc - 1 );
+        const int offYLoc = 1 << ( posShiftLoc - shiftVerLoc - 1 );
 
-          if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
+        // For upsampling: reference block should be smaller than target block
+        // Calculate the downscaled reference block dimensions
+        int refW = (blk.width * SCALE_1X.first) / scalingRatio.first;
+        int refH = (blk.height * SCALE_1X.second) / scalingRatio.second;
+        
+        // Ensure minimum size of 1x1
+        refW = std::max(1, refW);
+        refH = std::max(1, refH);
+        
+        // Calculate reference position using MV-aware fixed-point arithmetic
+        const int64_t x0Int = ((int64_t)((blk.x << 4) + mv.hor) * (int64_t)scalingRatio.first);
+        const int64_t y0Int = ((int64_t)((blk.y << 4) + mv.ver) * (int64_t)scalingRatio.second);
+        const int64_t x1Int = ((int64_t)(((blk.x + blk.width  - 1) << 4) + mv.hor) * (int64_t)scalingRatio.first);
+        const int64_t y1Int = ((int64_t)(((blk.y + blk.height - 1) << 4) + mv.ver) * (int64_t)scalingRatio.second);
+
+        int refX = (int)((x0Int + offXLoc) >> posShiftLoc);
+        int refY = (int)((y0Int + offYLoc) >> posShiftLoc);
+        
+        // Clamp to reference picture bounds
+        refX = std::max(0, std::min(refX, refWidth - refW));
+        refY = std::max(0, std::min(refY, refHeight - refH));
+        refW = std::min(refW, refWidth - refX);
+        refH = std::min(refH, refHeight - refY);
+
+        if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
+        {
+          const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
+          Pel* nnResult = new Pel[blk.width * blk.height];
+          if (srNN.performInference(refBlock.buf, refW, refH, refBlock.stride,
+                                    nnResult, blk.width, blk.height,
+                                    slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
           {
-            const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
-            Pel* nnResult = new Pel[blk.width * blk.height];
-            if (srNN.performInference(refBlock.buf, refW, refH, refBlock.stride,
-                                      nnResult, blk.width, blk.height,
-                                      slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
+            bool useNN = false;
+            if (curPic)
             {
-              bool useNN = false;
-              const Picture* curPic = refPic->cs->slice->getPic();
-              if (curPic)
+              const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
+              if (targetBlk.buf && targetBlk.stride > 0 && targetBlk.width >= blk.width && targetBlk.height >= blk.height)
               {
-                const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
-                if (targetBlk.buf && targetBlk.stride > 0 && targetBlk.width >= blk.width && targetBlk.height >= blk.height)
-                {
-                  int startX = blk.x;
-                  int startY = blk.y;
-                  double mseVTM = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
-                                                    vtmResult, blk.width, blk.width, blk.height);
-                  double mseNN  = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
-                                                    nnResult, blk.width, blk.width, blk.height);
-                  
-                  // Print MSE comparison
-                  printf("[NN-SR] Block (%d,%d) size %dx%d: MSE_VTM=%.6f, MSE_NN=%.6f, UseNN=%s\n", 
-                         blk.x, blk.y, blk.width, blk.height, mseVTM, mseNN, (mseNN < mseVTM) ? "YES" : "NO");
-                  
-                  useNN = (mseNN < mseVTM);
-                }
-              }
-              if (useNN)
-              {
-                for (int y = 0; y < blk.height; ++y)
-                {
-                  memcpy(dst + y * dstStride, nnResult + y * blk.width, blk.width * sizeof(Pel));
-                }
+                int startX = blk.x;
+                int startY = blk.y;
+                double mseVTM = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
+                                                  vtmResult, blk.width, blk.width, blk.height);
+                double mseNN  = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
+                                                  nnResult, blk.width, blk.width, blk.height);
+                
+                // Print MSE comparison
+                printf("[NN-SR] Block (%d,%d) size %dx%d: MSE_VTM=%.6f, MSE_NN=%.6f, UseNN=%s\n", 
+                       blk.x, blk.y, blk.width, blk.height, mseVTM, mseNN, (mseNN < mseVTM) ? "YES" : "NO");
+                
+                useNN = (mseNN < mseVTM);
               }
             }
-            delete [] nnResult;
+            if (useNN)
+            {
+              for (int y = 0; y < blk.height; ++y)
+              {
+                memcpy(dst + y * dstStride, nnResult + y * blk.width, blk.width * sizeof(Pel));
+              }
+            }
           }
+          delete [] nnResult;
         }
         delete [] vtmResult;
       }
