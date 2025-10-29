@@ -2500,6 +2500,12 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
   if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16 &&
     (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second))
   {
+    // Debug: Print scaling ratios
+    printf("[NN-SR] Processing block (%d,%d) size %dx%d, scaling: %.2fx%.2f (1.0x = %d)\n", 
+           blk.x, blk.y, blk.width, blk.height, 
+           (double)scalingRatio.first / SCALE_1X.first, 
+           (double)scalingRatio.second / SCALE_1X.second,
+           SCALE_1X.first);
     const Slice* slice = refPic->slices[0];
     if (slice)
     {
