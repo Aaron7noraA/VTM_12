@@ -40,6 +40,9 @@
 #include "Buffer.h"
 #include "UnitTools.h"
 #include "MCTS.h"
+#ifdef VTM_NN_SR_ENABLE
+#include "SuperResolutionNN.h"
+#endif
 
 #include <memory.h>
 #include <algorithm>
@@ -501,15 +504,7 @@ void InterPrediction::xPredInterUni(const PredictionUnit &pu, const RefPicList &
       CHECK( bioApplied, "BIO is not allowed with affine" );
       m_iRefListIdx = eRefPicList;
       bool genChromaMv = (!luma && chroma && compID == COMPONENT_Cb);
-      const Picture* refPicObj = pu.cu->slice->getRefPic( eRefPicList, iRefIdx );
-#ifdef VTM_NN_ENABLE
-      const bool refIsScaled = refPicObj->isRefScaled( pu.cs->pps );
-      const Picture* srcPicForMC = refIsScaled ? refPicObj : refPicObj->unscaledPic;
-      const std::pair<int,int> ratioForMC = refIsScaled ? SCALE_1X : pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx );
-      xPredAffineBlk( compID, pu, srcPicForMC, mv, pcYuvPred, bi, pu.cu->slice->clpRng( compID ), genChromaMv, ratioForMC );
-#else
-      xPredAffineBlk( compID, pu, refPicObj->unscaledPic, mv, pcYuvPred, bi, pu.cu->slice->clpRng( compID ), genChromaMv, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ) );
-#endif
+      xPredAffineBlk( compID, pu, pu.cu->slice->getRefPic( eRefPicList, iRefIdx )->unscaledPic, mv, pcYuvPred, bi, pu.cu->slice->clpRng( compID ), genChromaMv, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ));
     }
     else
     {
@@ -520,15 +515,7 @@ void InterPrediction::xPredInterUni(const PredictionUnit &pu, const RefPicList &
       }
       else
       {
-        const Picture* refPicObj = pu.cu->slice->getRefPic( eRefPicList, iRefIdx );
-#ifdef VTM_NN_ENABLE
-        const bool refIsScaled = refPicObj->isRefScaled( pu.cs->pps );
-        const Picture* srcPicForMC = refIsScaled ? refPicObj : refPicObj->unscaledPic;
-        const std::pair<int,int> ratioForMC = refIsScaled ? SCALE_1X : pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx );
-        xPredInterBlk( compID, pu, srcPicForMC, mv[0], pcYuvPred, bi, pu.cu->slice->clpRng( compID ), bioApplied, isIBC, ratioForMC );
-#else
-        xPredInterBlk( compID, pu, refPicObj->unscaledPic, mv[0], pcYuvPred, bi, pu.cu->slice->clpRng( compID ), bioApplied, isIBC, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ) );
-#endif
+        xPredInterBlk( compID, pu, pu.cu->slice->getRefPic( eRefPicList, iRefIdx )->unscaledPic, mv[0], pcYuvPred, bi, pu.cu->slice->clpRng( compID ), bioApplied, isIBC, pu.cu->slice->getScalingRatio( eRefPicList, iRefIdx ) );
       }
     }
   }
@@ -2342,6 +2329,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
 
   const bool scaled = refPic->isRefScaled( &pps );
 
+
   if( scaled )
   {
     int row, col;
@@ -2506,6 +2494,77 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
       JVET_J0090_SET_CACHE_ENABLE( true );
     }
   }
+
+#ifdef VTM_NN_SR_ENABLE
+  // VTM-first, NN-override: dst currently holds VTM RPR result when scaled==true
+  if (isLuma(compID) && scaled)
+  {
+    const Slice* slice = refPic->slices[0];
+    if (slice)
+    {
+      SuperResolutionNN srNN;
+      const std::string& srModelPath = refPic->cs->sps->getSRModelPath();
+      if (!srModelPath.empty() && srNN.loadModel(srModelPath.c_str()))
+      {
+        // Copy VTM result from dst into contiguous buffer
+        Pel* vtmResult = new Pel[blk.width * blk.height];
+        for (int y = 0; y < blk.height; ++y)
+        {
+          memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
+        }
+
+        // Prepare NN input block from refPic (unscaled)
+        int refWidth  = refPic->getPicWidthInLumaSamples();
+        int refHeight = refPic->getPicHeightInLumaSamples();
+        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
+        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
+        int refX = (blk.x * scaleX) >> 4;
+        int refY = (blk.y * scaleY) >> 4;
+        int refW = (blk.width * scaleX) >> 4;
+        int refH = (blk.height * scaleY) >> 4;
+        refX = std::max(0, std::min(refX, refWidth - refW));
+        refY = std::max(0, std::min(refY, refHeight - refH));
+
+        if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
+        {
+          const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
+          Pel* nnResult = new Pel[blk.width * blk.height];
+          if (srNN.performInference(refBlock.buf, refW, refH, refBlock.stride,
+                                    nnResult, blk.width, blk.height,
+                                    slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
+          {
+            bool useNN = false;
+            const Picture* curPic = pu.cu->slice->getPic();
+            if (curPic)
+            {
+              const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
+              if (targetBlk.buf && targetBlk.stride > 0 && targetBlk.width >= blk.width && targetBlk.height >= blk.height)
+              {
+                const Area& a = pu.blocks[compID];
+                int startX = a.x;
+                int startY = a.y;
+                double mseVTM = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
+                                                  vtmResult, blk.width, blk.width, blk.height);
+                double mseNN  = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
+                                                  nnResult, blk.width, blk.width, blk.height);
+                useNN = (mseNN < mseVTM);
+              }
+            }
+            if (useNN)
+            {
+              for (int y = 0; y < blk.height; ++y)
+              {
+                memcpy(dst + y * dstStride, nnResult + y * blk.width, blk.width * sizeof(Pel));
+              }
+            }
+          }
+          delete [] nnResult;
+        }
+        delete [] vtmResult;
+      }
+    }
+  }
+#endif
 
   return scaled;
 }
