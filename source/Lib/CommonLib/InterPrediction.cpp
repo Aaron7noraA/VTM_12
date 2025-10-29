@@ -694,7 +694,11 @@ void InterPrediction::xPredInterBlk ( const ComponentID& compID, const Predictio
 
   bool useAltHpelIf = pu.cu->imv == IMV_HPEL;
 
-  if( !isIBC && xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID], Size( dstPic.bufs[compID].width, dstPic.bufs[compID].height ) ), refPic, mv, dstPic.bufs[compID].buf, dstPic.bufs[compID].stride, bi, wrapRef, clpRng, 0, useAltHpelIf ) )
+  if( !isIBC && xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID], Size( dstPic.bufs[compID].width, dstPic.bufs[compID].height ) ), refPic, mv, dstPic.bufs[compID].buf, dstPic.bufs[compID].stride, bi, wrapRef, clpRng, 0, useAltHpelIf
+#ifdef VTM_NN_SR_ENABLE
+    , pu.cs->slice->getPic()
+#endif
+  ) )
   {
     CHECK( bilinearMC, "DMVR should be disabled with RPR" );
     CHECK( bioApplied, "BDOF should be disabled with RPR" );
@@ -1138,7 +1142,11 @@ void InterPrediction::xPredAffineBlk(const ComponentID &compID, const Prediction
         iMvScaleTmpVer = curMv.ver;
       }
 
-      if( xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID].offset( w, h ), Size( blockWidth, blockHeight ) ), refPic, Mv( iMvScaleTmpHor, iMvScaleTmpVer ), dstBuf.buf + w + h * dstBuf.stride, dstBuf.stride, bi, wrapRef, clpRng, 2 ) )
+      if( xPredInterBlkRPR( scalingRatio, *pu.cs->pps, CompArea( compID, chFmt, pu.blocks[compID].offset( w, h ), Size( blockWidth, blockHeight ) ), refPic, Mv( iMvScaleTmpHor, iMvScaleTmpVer ), dstBuf.buf + w + h * dstBuf.stride, dstBuf.stride, bi, wrapRef, clpRng, 2, false
+#ifdef VTM_NN_SR_ENABLE
+        , pu.cs->slice->getPic()
+#endif
+      ) )
       {
         CHECK( enablePROF, "PROF should be disabled with RPR" );
       }
@@ -2314,7 +2322,11 @@ bool InterPrediction::isLumaBvValid(const int ctuSize, const int xCb, const int 
   return true;
 }
 
-bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio, const PPS& pps, const CompArea &blk, const Picture* refPic, const Mv& mv, Pel* dst, const int dstStride, const bool bi, const bool wrapRef, const ClpRng& clpRng, const int filterIndex, const bool useAltHpelIf )
+bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio, const PPS& pps, const CompArea &blk, const Picture* refPic, const Mv& mv, Pel* dst, const int dstStride, const bool bi, const bool wrapRef, const ClpRng& clpRng, const int filterIndex, const bool useAltHpelIf
+#ifdef VTM_NN_SR_ENABLE
+  , const Picture* curPic
+#endif
+)
 {
   const ChromaFormat  chFmt = blk.chromaFormat;
   const ComponentID compID = blk.compID;
@@ -2561,7 +2573,6 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
                                       slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
             {
               bool useNN = false;
-              const Picture* curPic = refPic->cs->slice->getPic();
               if (curPic)
               {
                 const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
