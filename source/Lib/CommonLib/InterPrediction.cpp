@@ -2514,40 +2514,24 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
         }
 
-        // Prepare NN input block from refPic (unscaled) using proper fixed-point arithmetic
+        // Prepare NN input block from refPic (unscaled)
         int refWidth  = refPic->getPicWidthInLumaSamples();
         int refHeight = refPic->getPicHeightInLumaSamples();
+        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
+        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
         
-        // Use MV-aware, fixed-point scaling consistent with VTM RPR
-        const int posShiftLoc = SCALE_RATIO_BITS - 4;
-        const int shiftHorLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
-        const int shiftVerLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
-        const int offXLoc = 1 << ( posShiftLoc - shiftHorLoc - 1 );
-        const int offYLoc = 1 << ( posShiftLoc - shiftVerLoc - 1 );
-
-        // For upsampling: reference block should be smaller than target block
-        // Calculate the downscaled reference block dimensions
-        int refW = (blk.width * SCALE_1X.first) / scalingRatio.first;
-        int refH = (blk.height * SCALE_1X.second) / scalingRatio.second;
+        // For upsampling: reference block is smaller than output block
+        int refX = blk.x / scaleX;
+        int refY = blk.y / scaleY;
+        int refW = blk.width / scaleX;
+        int refH = blk.height / scaleY;
         
         // Ensure minimum size of 1x1
         refW = std::max(1, refW);
         refH = std::max(1, refH);
         
-        // Calculate reference position using MV-aware fixed-point arithmetic
-        const int64_t x0Int = ((int64_t)((blk.x << 4) + mv.hor) * (int64_t)scalingRatio.first);
-        const int64_t y0Int = ((int64_t)((blk.y << 4) + mv.ver) * (int64_t)scalingRatio.second);
-        const int64_t x1Int = ((int64_t)(((blk.x + blk.width  - 1) << 4) + mv.hor) * (int64_t)scalingRatio.first);
-        const int64_t y1Int = ((int64_t)(((blk.y + blk.height - 1) << 4) + mv.ver) * (int64_t)scalingRatio.second);
-
-        int refX = (int)((x0Int + offXLoc) >> posShiftLoc);
-        int refY = (int)((y0Int + offYLoc) >> posShiftLoc);
-        
-        // Clamp to reference picture bounds
         refX = std::max(0, std::min(refX, refWidth - refW));
         refY = std::max(0, std::min(refY, refHeight - refH));
-        refW = std::min(refW, refWidth - refX);
-        refH = std::min(refH, refHeight - refY);
 
         if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
         {
@@ -2558,6 +2542,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
                                     slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
           {
             bool useNN = false;
+            const Picture* curPic = refPic->cs->slice->getPic();
             if (curPic)
             {
               const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
@@ -2572,7 +2557,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
                 
                 // Print MSE comparison
                 printf("[NN-SR] Block (%d,%d) size %dx%d: MSE_VTM=%.6f, MSE_NN=%.6f, UseNN=%s\n", 
-                       blk.x, blk.y, blk.width, blk.height, mseVTM, mseNN, (mseNN < mseVTM) ? "YES" : "NO");
+                        blk.x, blk.y, blk.width, blk.height, mseVTM, mseNN, (mseNN < mseVTM) ? "YES" : "NO");
                 
                 useNN = (mseNN < mseVTM);
               }
