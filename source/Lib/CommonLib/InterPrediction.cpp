@@ -2497,7 +2497,8 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
 
 #ifdef VTM_NN_SR_ENABLE
   // VTM-first, NN-override: dst currently holds VTM RPR result when scaled==true
-  if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16)
+  if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16 && 
+      (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second))
   {
     const Slice* slice = refPic->slices[0];
     if (slice)
@@ -2506,23 +2507,18 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
       const std::string& srModelPath = refPic->cs->sps->getSRModelPath();
       if (!srModelPath.empty() && srNN.loadModel(srModelPath.c_str()))
       {
-        // Copy VTM result from dst into contiguous buffer
-        Pel* vtmResult = new Pel[blk.width * blk.height];
-        for (int y = 0; y < blk.height; ++y)
-        {
-          memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
-        }
+          // Copy VTM result from dst into contiguous buffer
+          Pel* vtmResult = new Pel[blk.width * blk.height];
+          for (int y = 0; y < blk.height; ++y)
+          {
+            memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
+          }
 
-        // Prepare NN input block from refPic (unscaled)
-        int refWidth  = refPic->getPicWidthInLumaSamples();
-        int refHeight = refPic->getPicHeightInLumaSamples();
-        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
-        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
-        
-        // Only process upsampling (scaling > 1) using fixed-point ratios
-        if (scalingRatio.first > SCALE_1X.first && scalingRatio.second > SCALE_1X.second)
-        {
-          // Derive NN reference block using fixed-point scaling and MV (luma path)
+          // Prepare NN input block from refPic (unscaled) using proper fixed-point arithmetic
+          int refWidth  = refPic->getPicWidthInLumaSamples();
+          int refHeight = refPic->getPicHeightInLumaSamples();
+          
+          // Use MV-aware, fixed-point scaling consistent with VTM RPR
           const int posShiftLoc = SCALE_RATIO_BITS - 4;
           const int shiftHorLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
           const int shiftVerLoc = MV_FRACTIONAL_BITS_INTERNAL; // luma
@@ -2539,12 +2535,14 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           const int refX1 = (int)((x1Int + offXLoc) >> posShiftLoc);
           const int refY1 = (int)((y1Int + offYLoc) >> posShiftLoc);
 
-          int refW = std::max(1, refX1 - refX + 1);
-          int refH = std::max(1, refY1 - refY + 1);
-
-          // Clamp to reference bounds
+          int refW = refX1 - refX + 1;
+          int refH = refY1 - refY + 1;
+          
+          // Clamp to reference picture bounds
           refX = std::max(0, std::min(refX, refWidth - refW));
           refY = std::max(0, std::min(refY, refHeight - refH));
+          refW = std::min(refW, refWidth - refX);
+          refH = std::min(refH, refHeight - refY);
 
           if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
           {
