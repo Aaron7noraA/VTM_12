@@ -2523,52 +2523,57 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
         if (scaleX > 1 && scaleY > 1)
         {
           // For upsampling: reference block is smaller than output block
-          int refX = (blk.x << 4) / scaleX;
-          int refY = (blk.y << 4) / scaleY;
-          int refW = (blk.width << 4) / scaleX;
-          int refH = (blk.height << 4) / scaleY;
+          int refX = blk.x / scaleX;
+          int refY = blk.y / scaleY;
+          int refW = blk.width / scaleX;
+          int refH = blk.height / scaleY;
+          
+          // Ensure minimum size of 1x1
+          refW = std::max(1, refW);
+          refH = std::max(1, refH);
+          
           refX = std::max(0, std::min(refX, refWidth - refW));
           refY = std::max(0, std::min(refY, refHeight - refH));
 
-        if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
-        {
-          const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
-          Pel* nnResult = new Pel[blk.width * blk.height];
-          if (srNN.performInference(refBlock.buf, refW, refH, refBlock.stride,
-                                    nnResult, blk.width, blk.height,
-                                    slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
+          if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
           {
-            bool useNN = false;
-            const Picture* curPic = refPic->cs->slice->getPic();
-            if (curPic)
+            const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
+            Pel* nnResult = new Pel[blk.width * blk.height];
+            if (srNN.performInference(refBlock.buf, refW, refH, refBlock.stride,
+                                      nnResult, blk.width, blk.height,
+                                      slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
             {
-              const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
-              if (targetBlk.buf && targetBlk.stride > 0 && targetBlk.width >= blk.width && targetBlk.height >= blk.height)
+              bool useNN = false;
+              const Picture* curPic = refPic->cs->slice->getPic();
+              if (curPic)
               {
-                int startX = blk.x;
-                int startY = blk.y;
-                double mseVTM = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
-                                                  vtmResult, blk.width, blk.width, blk.height);
-                double mseNN  = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
-                                                  nnResult, blk.width, blk.width, blk.height);
-                
-                // Print MSE comparison
-                printf("[NN-SR] Block (%d,%d) size %dx%d: MSE_VTM=%.6f, MSE_NN=%.6f, UseNN=%s\n", 
-                       blk.x, blk.y, blk.width, blk.height, mseVTM, mseNN, (mseNN < mseVTM) ? "YES" : "NO");
-                
-                useNN = (mseNN < mseVTM);
+                const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
+                if (targetBlk.buf && targetBlk.stride > 0 && targetBlk.width >= blk.width && targetBlk.height >= blk.height)
+                {
+                  int startX = blk.x;
+                  int startY = blk.y;
+                  double mseVTM = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
+                                                    vtmResult, blk.width, blk.width, blk.height);
+                  double mseNN  = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
+                                                    nnResult, blk.width, blk.width, blk.height);
+                  
+                  // Print MSE comparison
+                  printf("[NN-SR] Block (%d,%d) size %dx%d: MSE_VTM=%.6f, MSE_NN=%.6f, UseNN=%s\n", 
+                         blk.x, blk.y, blk.width, blk.height, mseVTM, mseNN, (mseNN < mseVTM) ? "YES" : "NO");
+                  
+                  useNN = (mseNN < mseVTM);
+                }
+              }
+              if (useNN)
+              {
+                for (int y = 0; y < blk.height; ++y)
+                {
+                  memcpy(dst + y * dstStride, nnResult + y * blk.width, blk.width * sizeof(Pel));
+                }
               }
             }
-            if (useNN)
-            {
-              for (int y = 0; y < blk.height; ++y)
-              {
-                memcpy(dst + y * dstStride, nnResult + y * blk.width, blk.width * sizeof(Pel));
-              }
-            }
+            delete [] nnResult;
           }
-          delete [] nnResult;
-        }
         }
         delete [] vtmResult;
       }
