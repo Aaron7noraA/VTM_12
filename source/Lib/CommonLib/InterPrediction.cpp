@@ -2514,23 +2514,33 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
         }
 
-        // Prepare NN input block from refPic (unscaled)
+        // Prepare NN input block from refPic (unscaled) using fixed-point, MV-aware mapping
         int refWidth  = refPic->getPicWidthInLumaSamples();
         int refHeight = refPic->getPicHeightInLumaSamples();
-        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
-        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
-        
-        // For upsampling: reference block is smaller than output block
-        int refX = blk.x / scaleX;
-        int refY = blk.y / scaleY;
-        int refW = blk.width / scaleX;
-        int refH = blk.height / scaleY;
-        
-        // Ensure minimum size of 1x1
+
+        // Compute source block size in reference picture for upsampling safely in fixed-point
+        // refW = round( blk.width * 1.0 / scale ) where scale = scalingRatio.first / SCALE_1X.first
+        // => refW = round( blk.width * SCALE_1X.first / scalingRatio.first )
+        const int64_t refW_num = (int64_t) blk.width  * (int64_t) SCALE_1X.first;
+        const int64_t refH_num = (int64_t) blk.height * (int64_t) SCALE_1X.second;
+        int refW = (int) ((refW_num + (scalingRatio.first  >> 1))  / (int64_t) scalingRatio.first);
+        int refH = (int) ((refH_num + (scalingRatio.second >> 1)) / (int64_t) scalingRatio.second);
         refW = std::max(1, refW);
         refH = std::max(1, refH);
-        
-        refX = std::max(0, std::min(refX, refWidth - refW));
+
+        // Map top-left with MV in fixed-point consistent with RPR
+        const int posShiftLoc = SCALE_RATIO_BITS - 4;
+        const int shiftHorLoc = MV_FRACTIONAL_BITS_INTERNAL;
+        const int shiftVerLoc = MV_FRACTIONAL_BITS_INTERNAL;
+        const int offXLoc = 1 << ( posShiftLoc - shiftHorLoc - 1 );
+        const int offYLoc = 1 << ( posShiftLoc - shiftVerLoc - 1 );
+        const int64_t x0Int = ((int64_t)((blk.x << 4) + mv.hor) * (int64_t)scalingRatio.first);
+        const int64_t y0Int = ((int64_t)((blk.y << 4) + mv.ver) * (int64_t)scalingRatio.second);
+        int refX = (int)((x0Int + offXLoc) >> posShiftLoc);
+        int refY = (int)((y0Int + offYLoc) >> posShiftLoc);
+
+        // Clamp to bounds
+        refX = std::max(0, std::min(refX, refWidth  - refW));
         refY = std::max(0, std::min(refY, refHeight - refH));
 
         if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
