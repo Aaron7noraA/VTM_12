@@ -2532,13 +2532,12 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           return scaled;
         }
         
-        // Compute source block size in reference picture for upsampling safely in fixed-point
-        // refW = round( blk.width * 1.0 / scale ) where scale = scalingRatio.first / SCALE_1X.first
-        // => refW = round( blk.width * SCALE_1X.first / scalingRatio.first )
-        const int64_t refW_num = (int64_t) blk.width  * (int64_t) SCALE_1X.first;
-        const int64_t refH_num = (int64_t) blk.height * (int64_t) SCALE_1X.second;
-        int refW = (int) ((refW_num + (scalingRatio.first  >> 1))  / (int64_t) scalingRatio.first);
-        int refH = (int) ((refH_num + (scalingRatio.second >> 1)) / (int64_t) scalingRatio.second);
+        // For upsampling: reference block should be smaller than target block
+        // refW = blk.width * scalingRatio / SCALE_1X (since scalingRatio < SCALE_1X for upsampling)
+        const int64_t refW_num = (int64_t) blk.width  * (int64_t) scalingRatio.first;
+        const int64_t refH_num = (int64_t) blk.height * (int64_t) scalingRatio.second;
+        int refW = (int) ((refW_num + (SCALE_1X.first  >> 1))  / (int64_t) SCALE_1X.first);
+        int refH = (int) ((refH_num + (SCALE_1X.second >> 1)) / (int64_t) SCALE_1X.second);
         refW = std::max(1, refW);
         refH = std::max(1, refH);
 
