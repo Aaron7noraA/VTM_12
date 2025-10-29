@@ -2518,6 +2518,20 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
         int refWidth  = refPic->getPicWidthInLumaSamples();
         int refHeight = refPic->getPicHeightInLumaSamples();
 
+        // Debug: Print scaling ratios
+        printf("[NN-SR] Processing block (%d,%d) size %dx%d, scaling: %.2fx%.2f (1.0x = %d)\n", 
+               blk.x, blk.y, blk.width, blk.height, 
+               (double)scalingRatio.first / SCALE_1X.first, 
+               (double)scalingRatio.second / SCALE_1X.second,
+               SCALE_1X.first);
+        
+        // Safety check: avoid division by zero
+        if (scalingRatio.first <= 0 || scalingRatio.second <= 0) {
+          printf("[NN-SR] ERROR: Invalid scaling ratio (%d, %d)\n", scalingRatio.first, scalingRatio.second);
+          delete [] vtmResult;
+          return scaled;
+        }
+        
         // Compute source block size in reference picture for upsampling safely in fixed-point
         // refW = round( blk.width * 1.0 / scale ) where scale = scalingRatio.first / SCALE_1X.first
         // => refW = round( blk.width * SCALE_1X.first / scalingRatio.first )
