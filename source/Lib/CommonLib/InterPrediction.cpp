@@ -2518,12 +2518,17 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
         int refHeight = refPic->getPicHeightInLumaSamples();
         int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
         int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
-        int refX = (blk.x * scaleX) >> 4;
-        int refY = (blk.y * scaleY) >> 4;
-        int refW = (blk.width * scaleX) >> 4;
-        int refH = (blk.height * scaleY) >> 4;
-        refX = std::max(0, std::min(refX, refWidth - refW));
-        refY = std::max(0, std::min(refY, refHeight - refH));
+        
+        // Only process upsampling (scaling > 1)
+        if (scaleX > 1 && scaleY > 1)
+        {
+          // For upsampling: reference block is smaller than output block
+          int refX = (blk.x << 4) / scaleX;
+          int refY = (blk.y << 4) / scaleY;
+          int refW = (blk.width << 4) / scaleX;
+          int refH = (blk.height << 4) / scaleY;
+          refX = std::max(0, std::min(refX, refWidth - refW));
+          refY = std::max(0, std::min(refY, refHeight - refH));
 
         if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
         {
@@ -2563,6 +2568,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
             }
           }
           delete [] nnResult;
+        }
         }
         delete [] vtmResult;
       }
