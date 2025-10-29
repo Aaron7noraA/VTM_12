@@ -2534,15 +2534,14 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
                                     slice->getSPS()->getBitDepths().recon[CHANNEL_TYPE_LUMA]))
           {
             bool useNN = false;
-            const Picture* curPic = pu.cu->slice->getPic();
+            const Picture* curPic = refPic->cs->slice->getPic();
             if (curPic)
             {
               const CPelBuf targetBlk = curPic->getBuf(COMPONENT_Y, PIC_TRUE_ORIGINAL_INPUT);
               if (targetBlk.buf && targetBlk.stride > 0 && targetBlk.width >= blk.width && targetBlk.height >= blk.height)
               {
-                const Area& a = pu.blocks[compID];
-                int startX = a.x;
-                int startY = a.y;
+                int startX = blk.x;
+                int startY = blk.y;
                 double mseVTM = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
                                                   vtmResult, blk.width, blk.width, blk.height);
                 double mseNN  = srNN.calculateMSE(targetBlk.buf + startY * targetBlk.stride + startX, targetBlk.stride,
