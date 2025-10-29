@@ -2497,8 +2497,7 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
 
 #ifdef VTM_NN_SR_ENABLE
   // VTM-first, NN-override: dst currently holds VTM RPR result when scaled==true
-  if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16 && 
-      (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second))
+  if (isLuma(compID) && scaled && blk.width >= 16 && blk.height >= 16)
   {
     const Slice* slice = refPic->slices[0];
     if (slice)
@@ -2507,6 +2506,9 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
       const std::string& srModelPath = refPic->cs->sps->getSRModelPath();
       if (!srModelPath.empty() && srNN.loadModel(srModelPath.c_str()))
       {
+        // Only process upsampling (scaling > 1) - use OR for 1D upscales
+        if (scalingRatio.first > SCALE_1X.first || scalingRatio.second > SCALE_1X.second)
+        {
           // Copy VTM result from dst into contiguous buffer
           Pel* vtmResult = new Pel[blk.width * blk.height];
           for (int y = 0; y < blk.height; ++y)
