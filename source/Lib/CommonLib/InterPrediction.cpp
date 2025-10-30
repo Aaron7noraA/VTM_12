@@ -2595,13 +2595,28 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
         int xInt1 = std::min( std::max( boundLeft,  x1_raw ), boundRight );
         int yInt1 = std::min( std::max( boundTop,   y1_raw ), boundBottom );
 
+        // Skip NN if any endpoint was clamped (boundary hit changes footprint)
+        if (xInt0 != x0_raw || yInt0 != y0_raw || xInt1 != x1_raw || yInt1 != y1_raw)
+        {
+          delete [] vtmResult;
+          return scaled;
+        }
+
         int refX = std::min( xInt0, xInt1 );
         int refY = std::min( yInt0, yInt1 );
         int refW = std::max( 1, std::abs( xInt1 - xInt0 ) + 1 );
         int refH = std::max( 1, std::abs( yInt1 - yInt0 ) + 1 );
 
-        refX = std::max( 0, std::min( refX, refWidth  - refW ) );
-        refY = std::max( 0, std::min( refY, refHeight - refH ) );
+        // Final clamp and skip if clamp moved the rectangle
+        int refX_clamped = std::max( 0, std::min( refX, refWidth  - refW ) );
+        int refY_clamped = std::max( 0, std::min( refY, refHeight - refH ) );
+        if (refX_clamped != refX || refY_clamped != refY)
+        {
+          delete [] vtmResult;
+          return scaled;
+        }
+        refX = refX_clamped;
+        refY = refY_clamped;
 
         // Guard: skip NN if the window is invalid or too small (border collapse)
         if (refW <= 0 || refH <= 0 ||
