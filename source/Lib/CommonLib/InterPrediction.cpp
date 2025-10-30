@@ -2514,24 +2514,82 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           memcpy(vtmResult + y * blk.width, dst + y * dstStride, blk.width * sizeof(Pel));
         }
 
-        // Prepare NN input block from refPic (unscaled)
+        // Prepare NN input block from refPic (unscaled) using fixed-point, MV-aware mapping
         int refWidth  = refPic->getPicWidthInLumaSamples();
         int refHeight = refPic->getPicHeightInLumaSamples();
-        int scaleX = scalingRatio.first >> SCALE_RATIO_BITS;
-        int scaleY = scalingRatio.second >> SCALE_RATIO_BITS;
+
+        // Debug: Print MV and block/scaling info
+        printf("[NN-SR] MV=(%d,%d) blk=(%d,%d) size=%dx%d bi=%d wrap=%d filt=%d\n",
+               mv.hor, mv.ver, blk.x, blk.y, blk.width, blk.height, (int)bi, (int)wrapRef, (int)filterIndex);
+        // Debug: Print scaling ratios
+        printf("[NN-SR] Processing block (%d,%d) size %dx%d, scaling: %.2fx%.2f (1.0x = %d)\n", 
+               blk.x, blk.y, blk.width, blk.height, 
+               (double)scalingRatio.first / SCALE_1X.first, 
+               (double)scalingRatio.second / SCALE_1X.second,
+               SCALE_1X.first);
         
-        // For upsampling: reference block is smaller than output block
-        int refX = blk.x / scaleX;
-        int refY = blk.y / scaleY;
-        int refW = blk.width / scaleX;
-        int refH = blk.height / scaleY;
+        // Safety check: avoid division by zero
+        if (scalingRatio.first <= 0 || scalingRatio.second <= 0) {
+          printf("[NN-SR] ERROR: Invalid scaling ratio (%d, %d)\n", scalingRatio.first, scalingRatio.second);
+          delete [] vtmResult;
+          return scaled;
+        }
         
-        // Ensure minimum size of 1x1
-        refW = std::max(1, refW);
-        refH = std::max(1, refH);
-        
-        refX = std::max(0, std::min(refX, refWidth - refW));
-        refY = std::max(0, std::min(refY, refHeight - refH));
+        // Compute reference endpoints using default RPR mapping and rounding
+        const int compScaleX = ::getComponentScaleX( blk.compID, chFmt );
+        const int compScaleY = ::getComponentScaleY( blk.compID, chFmt );
+        const int posShift = SCALE_RATIO_BITS - 4;
+        const int offX = 1 << ( posShift - MV_FRACTIONAL_BITS_INTERNAL - 1 );
+        const int offY = 1 << ( posShift - MV_FRACTIONAL_BITS_INTERNAL - 1 );
+
+        const int64_t posX = ( ( blk.pos().x << compScaleX ) - ( pps.getScalingWindow().getWindowLeftOffset() * SPS::getWinUnitX( chFmt ) ) ) >> compScaleX;
+        const int64_t posY = ( ( blk.pos().y << compScaleY ) - ( pps.getScalingWindow().getWindowTopOffset()  * SPS::getWinUnitY( chFmt ) ) ) >> compScaleY;
+
+        int64_t x0Int = ( ( posX << ( 4 + compScaleX ) ) + mv.getHor() ) * (int64_t)scalingRatio.first;
+        x0Int = SIGN( x0Int ) * ( ( llabs( x0Int ) + ( (long long)1 << ( 7 + compScaleX ) ) ) >> ( 8 + compScaleX ) )
+              + ( ( refPic->getScalingWindow().getWindowLeftOffset() * SPS::getWinUnitX( chFmt ) ) << ( posShift - compScaleX ) );
+        int64_t y0Int = ( ( posY << ( 4 + compScaleY ) ) + mv.getVer() ) * (int64_t)scalingRatio.second;
+        y0Int = SIGN( y0Int ) * ( ( llabs( y0Int ) + ( (long long)1 << ( 7 + compScaleY ) ) ) >> ( 8 + compScaleY ) )
+              + ( ( refPic->getScalingWindow().getWindowTopOffset() * SPS::getWinUnitY( chFmt ) ) << ( posShift - compScaleY ) );
+
+        int boundLeft   = 0;
+        int boundRight  = refWidth  >> compScaleX;
+        int boundTop    = 0;
+        int boundBottom = refHeight >> compScaleY;
+        if( refPic->subPictures.size() > 1 )
+        {
+          const SubPic& curSubPic = pps.getSubPicFromPos(blk.lumaPos());
+          if( curSubPic.getTreatedAsPicFlag() )
+          {
+            boundLeft   = curSubPic.getSubPicLeft()   >> compScaleX;
+            boundRight  = curSubPic.getSubPicRight()  >> compScaleX;
+            boundTop    = curSubPic.getSubPicTop()    >> compScaleY;
+            boundBottom = curSubPic.getSubPicBottom() >> compScaleY;
+          }
+        }
+
+        const int stepX = ( scalingRatio.first  + 8 ) >> 4;
+        const int stepY = ( scalingRatio.second + 8 ) >> 4;
+
+        int xInt0 = ( (int32_t)x0Int + offX ) >> posShift;
+        xInt0 = std::min( std::max( boundLeft, xInt0 ), boundRight );
+        int yInt0 = ( (int32_t)y0Int + offY ) >> posShift;
+        yInt0 = std::min( std::max( boundTop,  yInt0 ), boundBottom );
+
+        const int32_t xPosLast = (int32_t)x0Int + ( blk.width  - 1 ) * stepX;
+        const int32_t yPosLast = (int32_t)y0Int + ( blk.height - 1 ) * stepY;
+        int xInt1 = ( xPosLast + offX ) >> posShift;
+        xInt1 = std::min( std::max( boundLeft, xInt1 ), boundRight );
+        int yInt1 = ( yPosLast + offY ) >> posShift;
+        yInt1 = std::min( std::max( boundTop,  yInt1 ), boundBottom );
+
+        int refX = std::min( xInt0, xInt1 );
+        int refY = std::min( yInt0, yInt1 );
+        int refW = std::max( 1, std::abs( xInt1 - xInt0 ) + 1 );
+        int refH = std::max( 1, std::abs( yInt1 - yInt0 ) + 1 );
+
+        refX = std::max( 0, std::min( refX, refWidth  - refW ) );
+        refY = std::max( 0, std::min( refY, refHeight - refH ) );
 
         if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
         {
@@ -2571,7 +2629,6 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
             }
           }
           delete [] nnResult;
-          
         }
         delete [] vtmResult;
       }
