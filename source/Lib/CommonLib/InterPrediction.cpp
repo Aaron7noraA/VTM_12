@@ -2591,6 +2591,16 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
         refX = std::max( 0, std::min( refX, refWidth  - refW ) );
         refY = std::max( 0, std::min( refY, refHeight - refH ) );
 
+        // Guard: skip NN if the window is invalid or too small (border collapse)
+        if (refW <= 0 || refH <= 0 ||
+            refX < 0 || refY < 0 ||
+            refX + refW > refWidth || refY + refH > refHeight ||
+            refW < 4 || refH < 4)
+        {
+          delete [] vtmResult;
+          return scaled;
+        }
+
         if (refW > 0 && refH > 0 && refX + refW <= refWidth && refY + refH <= refHeight)
         {
           const CPelBuf refBlock = refPic->getRecoBuf(CompArea(compID, chFmt, Position(refX, refY), Size(refW, refH)), wrapRef);
