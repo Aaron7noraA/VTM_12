@@ -2589,6 +2589,17 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
           return scaled;
         }
 
+        // Enforce ideal raw span from scaling ratio (avoid +/-1 expansions like 65x64)
+        const int idealW = (int)(((int64_t)blk.width  * scalingRatio.first  + (SCALE_1X.first  >> 1)) / (int64_t)SCALE_1X.first);
+        const int idealH = (int)(((int64_t)blk.height * scalingRatio.second + (SCALE_1X.second >> 1)) / (int64_t)SCALE_1X.second);
+        const int spanX_raw = std::abs(x1_raw - x0_raw) + 1;
+        const int spanY_raw = std::abs(y1_raw - y0_raw) + 1;
+        if (idealW < 1 || idealH < 1 || spanX_raw != idealW || spanY_raw != idealH)
+        {
+          delete [] vtmResult;
+          return scaled;
+        }
+
         // Now clamp normalized endpoints for rectangle construction
         int xInt0 = std::min( std::max( boundLeft,  x0_raw ), boundRight );
         int yInt0 = std::min( std::max( boundTop,   y0_raw ), boundBottom );
