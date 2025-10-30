@@ -2571,17 +2571,29 @@ bool InterPrediction::xPredInterBlkRPR( const std::pair<int, int>& scalingRatio,
         const int stepX = ( scalingRatio.first  + 8 ) >> 4;
         const int stepY = ( scalingRatio.second + 8 ) >> 4;
 
-        int xInt0 = ( (int32_t)x0Int + offX ) >> posShift;
-        xInt0 = std::min( std::max( boundLeft, xInt0 ), boundRight );
-        int yInt0 = ( (int32_t)y0Int + offY ) >> posShift;
-        yInt0 = std::min( std::max( boundTop,  yInt0 ), boundBottom );
-
+        // Compute raw endpoints (no clamp) to detect true OOB before normalization
+        const int x0_raw = ( (int32_t)x0Int + offX ) >> posShift;
+        const int y0_raw = ( (int32_t)y0Int + offY ) >> posShift;
         const int32_t xPosLast = (int32_t)x0Int + ( blk.width  - 1 ) * stepX;
         const int32_t yPosLast = (int32_t)y0Int + ( blk.height - 1 ) * stepY;
-        int xInt1 = ( xPosLast + offX ) >> posShift;
-        xInt1 = std::min( std::max( boundLeft, xInt1 ), boundRight );
-        int yInt1 = ( yPosLast + offY ) >> posShift;
-        yInt1 = std::min( std::max( boundTop,  yInt1 ), boundBottom );
+        const int x1_raw = ( xPosLast + offX ) >> posShift;
+        const int y1_raw = ( yPosLast + offY ) >> posShift;
+
+        // Early skip if any raw endpoint is outside reference bounds
+        if (x0_raw < boundLeft || x0_raw > boundRight ||
+            x1_raw < boundLeft || x1_raw > boundRight ||
+            y0_raw < boundTop  || y0_raw > boundBottom ||
+            y1_raw < boundTop  || y1_raw > boundBottom)
+        {
+          delete [] vtmResult;
+          return scaled;
+        }
+
+        // Now clamp normalized endpoints for rectangle construction
+        int xInt0 = std::min( std::max( boundLeft,  x0_raw ), boundRight );
+        int yInt0 = std::min( std::max( boundTop,   y0_raw ), boundBottom );
+        int xInt1 = std::min( std::max( boundLeft,  x1_raw ), boundRight );
+        int yInt1 = std::min( std::max( boundTop,   y1_raw ), boundBottom );
 
         int refX = std::min( xInt0, xInt1 );
         int refY = std::min( yInt0, yInt1 );
